@@ -3,9 +3,9 @@
   "compilerOptions": {
     "composite": true,
     "jsx": "react-jsx",
-    "baseUrl": ".",
+    "noUncheckedSideEffectImports": false,
     "paths": {
-      "@/*": ["src/renderer/src/*"]
+      "@/*": ["./src/renderer/src/*"]
     }
   },
   "include": ["src/renderer/src/**/*", "src/renderer/index.html"]
