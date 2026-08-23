@@ -74,7 +74,7 @@ export default function App(): React.JSX.Element {
 
     if (window.api?.videos?.onProgressUpdate) {
       let updateQueue: Record<string, any> = {};
-      let throttleTimeout: NodeJS.Timeout | null = null;
+      let throttleTimeout: ReturnType<typeof setTimeout> | null = null;
 
       const unsub = window.api.videos.onProgressUpdate((data) => {
         if (data.percent === 100 && data.step === 4) {
@@ -230,7 +230,7 @@ export default function App(): React.JSX.Element {
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className="relative flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground transition-colors duration-200"
+      className="bg-background text-foreground relative flex h-screen w-screen flex-col overflow-hidden transition-colors duration-200"
     >
       {/* Top Header Navigation */}
       <Header />
@@ -239,14 +239,14 @@ export default function App(): React.JSX.Element {
       <main className="relative flex flex-1 overflow-hidden">
         {/* Drag & Drop Visual Overlay */}
         {isDraggingOver && (
-          <div className="bg-background/90 pointer-events-none absolute inset-0 z-50 m-4 flex flex-col items-center justify-center rounded-3xl border-4 border-dashed border-primary p-8 text-center backdrop-blur-md transition-all">
-            <div className="bg-primary/20 border-primary-border/40 mb-4 flex h-20 w-20 animate-bounce items-center justify-center rounded-3xl border text-primary-text shadow-2xl">
+          <div className="bg-background/90 border-primary pointer-events-none absolute inset-0 z-50 mx-1 my-2 flex flex-col items-center justify-center rounded-3xl border-4 border-dashed p-8 text-center backdrop-blur-md transition-all">
+            <div className="bg-primary/20 border-primary-border/40 text-primary-text mb-4 flex h-20 w-20 animate-bounce items-center justify-center rounded-3xl border shadow-2xl">
               <Upload className="h-10 w-10" />
             </div>
-            <h2 className="text-2xl font-bold text-foreground">
+            <h2 className="text-foreground text-2xl font-bold">
               Drop Video File to Process & Package
             </h2>
-            <p className="mt-2 max-w-md text-sm text-muted">
+            <p className="text-muted mt-2 max-w-md text-sm">
               Supports .mp4, .mkv, .webm, .mov, and .adaumc files. Generates GIF
               preview (Median Cut algorithm) & 5x5 WebVTT sprites.
             </p>

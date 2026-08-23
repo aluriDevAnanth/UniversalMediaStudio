@@ -1,3 +1,10 @@
+/// <reference types="vite/client" />
+
+declare module "*.png" {
+  const value: string;
+  export default value;
+}
+
 export interface VideoRecord {
   id: string;
   title: string;
@@ -28,6 +35,12 @@ export interface AnalyticsData {
     totalVideosProcessed: number;
     lastProcessingSpeedSeconds: number;
   };
+}
+
+export interface TagMetadata {
+  name: string;
+  color: string;
+  category?: string;
 }
 
 export interface IElectronAPI {
@@ -68,10 +81,15 @@ export interface IElectronAPI {
   };
   tags: {
     get: () => Promise<string[]>;
-    add: (tag: string) => Promise<string[]>;
+    getMetadata: () => Promise<Record<string, { color: string; category?: string }>>;
+    setMetadata: (name: string, color: string, category?: string) => Promise<Record<string, { color: string; category?: string }>>;
+    getCategoryColors: () => Promise<Record<string, string>>;
+    setCategoryColor: (category: string, color: string) => Promise<Record<string, string>>;
+    add: (tag: string, color?: string, category?: string) => Promise<string[]>;
     delete: (tag: string) => Promise<string[]>;
     rename: (oldTag: string, newTag: string) => Promise<string[]>;
     updateVideo: (videoId: string, tags: string[]) => Promise<VideoRecord>;
+    bulkUpdateVideos: (videoIds: string[], addTags: string[], removeTags: string[]) => Promise<VideoRecord[]>;
   };
   analytics: {
     get: () => Promise<AnalyticsData>;
@@ -117,3 +135,5 @@ declare global {
     api: IElectronAPI;
   }
 }
+
+declare module "*.css";

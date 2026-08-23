@@ -1,7 +1,22 @@
-@import "@radix-ui/themes/styles.css";
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@layer theme, base, radix, components, utilities;
+
+@import "@radix-ui/themes/styles.css" layer(radix);
+
+@theme {
+  --color-background: var(--color-bg);
+  --color-surface: var(--color-surface);
+  --color-surface-hover: var(--color-surface-hover);
+  --color-foreground: var(--color-text);
+  --color-muted: var(--color-text-muted);
+  --color-border: var(--color-border);
+  --color-primary: var(--color-primary);
+  --color-primary-hover: var(--color-primary-hover);
+  --color-primary-border: var(--color-primary-border);
+  --color-primary-text: var(--color-primary-text);
+  --color-primary-muted: var(--color-primary-muted);
+}
 
 :root {
   /* Light Theme (Rich Soft Slate Blue) */
@@ -59,4 +74,9 @@
 
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(99, 102, 241, 0.8);
+}
+
+@keyframes marquee {
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(-100%); }
 }

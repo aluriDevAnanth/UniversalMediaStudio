@@ -3,7 +3,6 @@ import ReactDOM from "react-dom/client";
 import { Theme } from "@radix-ui/themes";
 import App from "./App";
 import "./index.css";
-
 import { useVideoStore } from "./store/videoStore";
 
 function MainApp(): React.JSX.Element {
