@@ -380,6 +380,37 @@ export class FFmpegProcessor {
             let sizeBytes = 0;
             try {
               if (fs.existsSync(outputThumb)) {
+                // Stamp official .adaumc icon emblem onto thumbnail
+                const iconPath = path.join(process.cwd(), "resources", "icon.png");
+                if (fs.existsSync(iconPath)) {
+                  require("sharp")(outputThumb)
+                    .metadata()
+                    .then((meta: any) => {
+                      const w = meta.width || 640;
+                      const h = meta.height || 360;
+                      return require("sharp")(iconPath)
+                        .resize({ width: 52, height: 52, fit: "inside" })
+                        .toBuffer()
+                        .then((iconBuf: Buffer) => {
+                          return require("sharp")(outputThumb)
+                            .composite([
+                              {
+                                input: iconBuf,
+                                top: Math.max(0, h - 60),
+                                left: Math.max(0, w - 60),
+                                blend: "over",
+                              },
+                            ])
+                            .toBuffer();
+                        })
+                        .then((stampedBuf: Buffer) => {
+                          fs.writeFileSync(outputThumb, stampedBuf);
+                        });
+                    })
+                    .catch((stampErr: any) => {
+                      console.error("Failed to stamp .adaumc icon onto thumbnail:", stampErr);
+                    });
+                }
                 sizeBytes = fs.statSync(outputThumb).size;
               }
             } catch (e) {}

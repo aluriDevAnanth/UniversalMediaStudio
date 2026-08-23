@@ -30,11 +30,18 @@ export interface AnalyticsRecord {
   lastProcessingSpeedSeconds: number;
 }
 
+export interface TagMetaItem {
+  color: string;
+  category?: string;
+}
+
 interface DBData {
   masterPasswordHash: string | null;
   videos: Record<string, VideoRecord>;
   playlists: Record<string, PlaylistRecord>;
   tags: string[];
+  tagMetadata?: Record<string, TagMetaItem>;
+  categoryColors?: Record<string, string>;
   analytics: AnalyticsRecord;
 }
 
@@ -225,16 +232,58 @@ class Database {
     return this.data.tags;
   }
 
-  public addTag(tag: string): string[] {
+  public getCategoryColors(): Record<string, string> {
+    if (!this.data.categoryColors) {
+      this.data.categoryColors = {};
+    }
+    return this.data.categoryColors;
+  }
+
+  public setCategoryColor(category: string, color: string): Record<string, string> {
+    if (!this.data.categoryColors) {
+      this.data.categoryColors = {};
+    }
+    this.data.categoryColors[category] = color;
+    this.save();
+    return this.data.categoryColors;
+  }
+
+  public getTagMetadata(): Record<string, TagMetaItem> {
+    if (!this.data.tagMetadata) {
+      this.data.tagMetadata = {};
+    }
+    return this.data.tagMetadata;
+  }
+
+  public setTagMetadata(name: string, color: string, category?: string): Record<string, TagMetaItem> {
+    if (!this.data.tagMetadata) {
+      this.data.tagMetadata = {};
+    }
+    this.data.tagMetadata[name] = { color, category: category || "" };
+    this.save();
+    return this.data.tagMetadata;
+  }
+
+  public addTag(tag: string, color?: string, category?: string): string[] {
     if (!this.data.tags.includes(tag)) {
       this.data.tags.push(tag);
-      this.save();
     }
+    if (color || category) {
+      if (!this.data.tagMetadata) this.data.tagMetadata = {};
+      this.data.tagMetadata[tag] = {
+        color: color || "#3b82f6",
+        category: category || "",
+      };
+    }
+    this.save();
     return this.data.tags;
   }
 
   public deleteTag(tag: string): string[] {
     this.data.tags = this.data.tags.filter((t) => t !== tag);
+    if (this.data.tagMetadata && this.data.tagMetadata[tag]) {
+      delete this.data.tagMetadata[tag];
+    }
     for (const v of Object.values(this.data.videos)) {
       v.tags = v.tags.filter((t) => t !== tag);
     }
@@ -247,6 +296,10 @@ class Database {
     if (!trimmed || oldTag === trimmed) return this.data.tags;
     this.data.tags = this.data.tags.map((t) => (t === oldTag ? trimmed : t));
     this.data.tags = Array.from(new Set(this.data.tags));
+    if (this.data.tagMetadata && this.data.tagMetadata[oldTag]) {
+      this.data.tagMetadata[trimmed] = this.data.tagMetadata[oldTag];
+      delete this.data.tagMetadata[oldTag];
+    }
     for (const v of Object.values(this.data.videos)) {
       if (v.tags.includes(oldTag)) {
         v.tags = v.tags.map((t) => (t === oldTag ? trimmed : t));
@@ -265,6 +318,26 @@ class Database {
       return v;
     }
     throw new Error("Video not found");
+  }
+
+  public bulkUpdateVideoTags(
+    videoIds: string[],
+    addTags: string[],
+    removeTags: string[],
+  ): VideoRecord[] {
+    const updated: VideoRecord[] = [];
+    for (const id of videoIds) {
+      const v = this.data.videos[id];
+      if (v) {
+        let set = new Set(v.tags);
+        addTags.forEach((t) => set.add(t));
+        removeTags.forEach((t) => set.delete(t));
+        v.tags = Array.from(set);
+        updated.push(v);
+      }
+    }
+    this.save();
+    return updated;
   }
 
   // Analytics
