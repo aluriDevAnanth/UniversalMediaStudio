@@ -76,14 +76,15 @@ export const MediaDetailsPanel: React.FC<MediaDetailsPanelProps> = ({
           </div>
 
           {/* Tag Editor Section */}
-          <div className="flex">
-            <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-foreground">
+          <div className="flex flex-col gap-1.5 rounded-xl border border-border bg-background/50 p-3">
+            <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted">
               Video Tags
             </span>
             <TagDropdown
               selectedTags={selectedVideo.tags || []}
               onChange={(newTags) => updateVideoTags(selectedVideo.id, newTags)}
-              placeholder="Add tags..."
+              placeholder="Add tags to video..."
+              mode="editor"
             />
           </div>
 
