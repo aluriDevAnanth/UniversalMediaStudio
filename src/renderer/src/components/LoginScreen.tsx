@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Lock, ShieldCheck, KeyRound, Sparkles } from "lucide-react";
+import { Lock, ShieldCheck, KeyRound, Sparkles, Minus, Square, X } from "lucide-react";
 import { useVideoStore } from "../store/videoStore";
 
 export const LoginScreen: React.FC = () => {
@@ -8,6 +8,10 @@ export const LoginScreen: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const handleMinimize = () => window.api?.windowControls?.minimize();
+  const handleMaximize = () => window.api?.windowControls?.maximize();
+  const handleClose = () => window.api?.windowControls?.close();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,7 +45,40 @@ export const LoginScreen: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 backdrop-blur-xl p-4 transition-colors duration-200">
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/95 backdrop-blur-xl p-4 transition-colors duration-200">
+      {/* Window Controls Bar */}
+      <div
+        className="absolute top-0 left-0 right-0 flex items-center justify-end p-3 z-20"
+        style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
+      >
+        <div
+          className="flex items-center gap-1"
+          style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+        >
+          <button
+            onClick={handleMinimize}
+            title="Minimize Window"
+            className="cursor-pointer rounded-lg p-1.5 text-muted transition hover:bg-surface-hover hover:text-foreground"
+          >
+            <Minus className="h-4 w-4" />
+          </button>
+          <button
+            onClick={handleMaximize}
+            title="Maximize / Restore Window"
+            className="cursor-pointer rounded-lg p-1.5 text-muted transition hover:bg-surface-hover hover:text-foreground"
+          >
+            <Square className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={handleClose}
+            title="Close Application"
+            className="cursor-pointer rounded-lg p-1.5 text-muted transition hover:bg-rose-600 hover:text-white"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
       <div className="w-full max-w-md bg-surface border border-border rounded-2xl p-8 shadow-2xl relative overflow-hidden">
         {/* Glow Effects */}
         <div className="absolute -top-24 -left-24 w-48 h-48 bg-primary/20 rounded-full blur-3xl" />

@@ -1,6 +1,5 @@
 import React from "react";
 import {
-  Film,
   Search,
   Lock,
   Upload,
@@ -12,6 +11,7 @@ import {
 } from "lucide-react";
 import { useVideoStore } from "../store/videoStore";
 import { TagDropdown } from "./TagDropdown";
+import appIcon from "@/assets/icon.png";
 
 export const Header: React.FC = () => {
   const {
@@ -37,8 +37,8 @@ export const Header: React.FC = () => {
       >
         {/* Logo */}
         <div className="flex shrink-0 items-center gap-2.5">
-          <div className="bg-primary/20 border-primary-border/30 flex h-8 w-8 items-center justify-center rounded-xl border text-primary-text shadow-md">
-            <Film className="h-4 w-4" />
+          <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-xl border border-primary-border/30 bg-primary/20 shadow-md">
+            <img src={appIcon} alt="App Icon" className="h-full w-full object-cover" />
           </div>
           <h1 className="flex items-center gap-1.5 text-sm font-bold tracking-tight text-foreground">
             MediaHub
@@ -60,7 +60,7 @@ export const Header: React.FC = () => {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search videos..."
+              placeholder="Search or #Category:Tag..."
               className="w-full rounded-xl border border-border bg-background py-1.5 pl-9 pr-3 text-xs text-foreground placeholder-muted transition focus:border-primary focus:outline-none"
             />
           </div>
