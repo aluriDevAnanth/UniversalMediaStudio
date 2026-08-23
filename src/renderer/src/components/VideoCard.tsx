@@ -1,10 +1,15 @@
 import React, { useState } from "react";
-import { Play, Clock, Star, Trash2, Sparkles } from "lucide-react";
+import { Play, Clock, Star, Trash2, Sparkles, Check } from "lucide-react";
 import { VideoRecord } from "../env";
 import { useVideoStore } from "../store/videoStore";
 import { BundleExplorerModal } from "./BundleExplorerModal";
 import { VideoContextMenu } from "./VideoContextMenu";
-import { TagDropdown } from "./TagDropdown";
+import {
+  parseTag,
+  getCategoryColor,
+  getTagStyle,
+  HighlightText,
+} from "../utils/tagColors";
 
 interface VideoCardProps {
   video: VideoRecord;
@@ -13,7 +18,10 @@ interface VideoCardProps {
 export const VideoCard: React.FC<VideoCardProps> = ({ video }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [showExplorer, setShowExplorer] = useState(false);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   const {
     setPlayingVideo,
     playlists,
@@ -21,7 +29,10 @@ export const VideoCard: React.FC<VideoCardProps> = ({ video }) => {
     deleteVideo,
     selectedVideoId,
     setSelectedVideoId,
-    updateVideoTags,
+    selectedVideoIds,
+    toggleVideoSelection,
+    categoryColors,
+    searchQuery,
   } = useVideoStore();
 
   const watchLaterPl = playlists.find((p) => p.id === "watch_later");
@@ -31,6 +42,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({ video }) => {
   const isInFavourite = favouritePl?.videoIds.includes(video.id);
 
   const isSelected = selectedVideoId === video.id;
+  const isMultiSelected = selectedVideoIds.includes(video.id);
 
   const formatDuration = (sec: number) => {
     const m = Math.floor(sec / 60);
@@ -55,24 +67,29 @@ export const VideoCard: React.FC<VideoCardProps> = ({ video }) => {
           ) {
             return;
           }
-          setSelectedVideoId(isSelected ? null : video.id);
+          if (e.shiftKey || selectedVideoIds.length > 0) {
+            toggleVideoSelection(video.id);
+          } else {
+            setSelectedVideoId(isSelected ? null : video.id);
+          }
         }}
         onContextMenu={(e) => {
           e.preventDefault();
           setContextMenu({ x: e.clientX, y: e.clientY });
         }}
-        className={`group relative rounded-xl overflow-hidden bg-surface border transition-all duration-300 shadow-md hover:shadow-primary/10 flex flex-col cursor-pointer ${
-          isSelected
-            ? "border-primary ring-2 ring-primary/30"
-            : "border-border hover:border-primary/50"
+        className={`hover:shadow-primary/10 group relative flex cursor-pointer flex-col overflow-hidden rounded-xl border bg-surface shadow-md transition-all duration-300 ${
+          isMultiSelected
+            ? "ring-primary/40 border-primary bg-primary/5 ring-2"
+            : isSelected
+              ? "ring-primary/30 border-primary ring-2"
+              : "hover:border-primary/50 border-border"
         }`}
       >
-        {/* Media Thumbnail Container */}
-        <div className="relative aspect-video bg-black/60 overflow-hidden">
+        <div className="relative aspect-video overflow-hidden bg-black/60">
           <img
             src={isHovered ? animatedGifUrl : staticThumbUrl}
             alt={video.title}
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
             onError={(e) => {
               // Fallback if animated gif is missing
               if (isHovered) {
@@ -81,107 +98,151 @@ export const VideoCard: React.FC<VideoCardProps> = ({ video }) => {
             }}
           />
 
+          {/* Selection Checkbox overlay */}
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleVideoSelection(video.id);
+            }}
+            className={`absolute left-2 top-2 z-10 flex h-5 w-5 cursor-pointer items-center justify-center rounded-md border transition ${
+              isMultiSelected
+                ? "border-primary bg-primary text-white shadow-md"
+                : "border-white/30 bg-black/50 text-transparent opacity-0 group-hover:opacity-100"
+            }`}
+            title={isMultiSelected ? "Deselect video" : "Select video for bulk actions"}
+          >
+            <Check className="h-3.5 w-3.5 stroke-[3]" />
+          </div>
+
           {/* Hover Play Overlay */}
-          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
+          <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0">
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 setPlayingVideo(video);
               }}
-              className="p-3.5 rounded-full bg-primary/90 text-white hover:bg-primary hover:scale-110 transition cursor-pointer shadow-lg border border-white/20"
+              className="bg-primary/90 cursor-pointer rounded-full border border-white/20 bg-primary p-3.5 text-white opacity-0 shadow-lg transition-opacity hover:scale-110 group-hover:opacity-100"
               title="Play Video"
             >
-              <Play className="w-6 h-6 fill-current translate-x-0.5" />
+              <Play className="size-6 fill-current" />
             </button>
           </div>
 
           {/* Badges Overlay */}
-          <div className="absolute top-2 left-2 right-2 flex items-center justify-between pointer-events-none">
-            <span className="px-2 py-0.5 rounded bg-black/70 text-white/90 text-[10px] font-semibold backdrop-blur-md border border-white/10">
+          <div className="pointer-events-none absolute right-2 top-2 flex items-center gap-1">
+            <span className="rounded border border-white/10 bg-black/70 px-2 py-0.5 text-[10px] font-semibold text-white/90 backdrop-blur-md">
               {formatDuration(video.duration)}
             </span>
-            <span className="px-2 py-0.5 rounded bg-black/70 text-white/90 text-[10px] font-semibold backdrop-blur-md border border-white/10">
+            <span className="rounded border border-white/10 bg-black/70 px-2 py-0.5 text-[10px] font-semibold text-white/90 backdrop-blur-md">
               {video.resolution || "HD"}
             </span>
           </div>
         </div>
 
         {/* Card Content Footer */}
-        <div className="p-3 flex flex-col flex-1 justify-between bg-surface">
+        <div className="flex flex-1 flex-col justify-between bg-surface px-2 py-1">
           <div>
-            <h3
-              className="font-bold text-sm text-foreground line-clamp-1 group-hover:text-primary-text transition"
+            <div
+              className="line-clamp-1 text-xs font-bold text-foreground transition group-hover:text-primary-text"
               title={video.title}
             >
-              {video.title}
-            </h3>
+              <HighlightText text={video.title} query={searchQuery} />
+            </div>
 
-            {/* Tags Component */}
-            <div className="mt-2" onClick={(e) => e.stopPropagation()}>
-              <TagDropdown
-                selectedTags={video.tags || []}
-                onChange={(newTags) => updateVideoTags(video.id, newTags)}
-              />
+            {/* Tag Pills */}
+            <div className="mt-1 flex flex-wrap items-center gap-1 overflow-hidden">
+              {video.tags.length === 0 ? (
+                <span className="text-[10px] text-muted">No Tags</span>
+              ) : (
+                video.tags.slice(0, 3).map((t) => {
+                  const { category, name } = parseTag(t);
+                  const color = getCategoryColor(category, categoryColors);
+                  const style = getTagStyle(color);
+                  const tagText = `${category}:${name}`;
+                  return (
+                    <span
+                      key={t}
+                      style={style}
+                      className="rounded border px-1.5 py-0.2 text-[9px] font-semibold"
+                    >
+                      <HighlightText text={tagText} query={searchQuery} />
+                    </span>
+                  );
+                })
+              )}
+              {video.tags.length > 3 && (
+                <span className="text-[9px] font-bold text-muted">
+                  +{video.tags.length - 3}
+                </span>
+              )}
             </div>
           </div>
 
           {/* Card Actions */}
-          <div className="mt-3 pt-2.5 border-t border-border/50 flex items-center justify-between">
-            <div className="flex items-center gap-1">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  togglePlaylistVideo("watch_later", video.id);
-                }}
-                className={`p-1.5 rounded-lg transition cursor-pointer ${
-                  isInWatchLater
-                    ? "bg-primary/20 text-primary-text"
-                    : "text-muted hover:bg-surface-hover hover:text-foreground"
-                }`}
-                title={isInWatchLater ? "Remove from Watch Later" : "Add to Watch Later"}
-              >
-                <Clock className="w-4 h-4" />
-              </button>
-
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  togglePlaylistVideo("favourite", video.id);
-                }}
-                className={`p-1.5 rounded-lg transition cursor-pointer ${
-                  isInFavourite
-                    ? "bg-yellow-500/20 text-yellow-400"
-                    : "text-muted hover:bg-surface-hover hover:text-foreground"
-                }`}
-                title={isInFavourite ? "Remove from Favorites" : "Add to Favorites"}
-              >
-                <Star className={`w-4 h-4 ${isInFavourite ? "fill-current" : ""}`} />
-              </button>
-
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowExplorer(true);
-                }}
-                className="p-1.5 rounded-lg text-muted hover:bg-surface-hover hover:text-foreground transition cursor-pointer"
-                title="Inspect .adaumc Container Assets"
-              >
-                <Sparkles className="w-4 h-4" />
-              </button>
-            </div>
-
-            <button
+          <div className="mt-1.5 flex items-center gap-1">
+            <div
               onClick={(e) => {
                 e.stopPropagation();
-                if (confirm(`Are you sure you want to delete "${video.title}"?`)) {
+                togglePlaylistVideo("watch_later", video.id);
+              }}
+              className={`cursor-pointer rounded-lg p-1.5 transition ${
+                isInWatchLater
+                  ? "bg-primary/20 text-primary-text"
+                  : "text-muted hover:bg-surface-hover hover:text-foreground"
+              }`}
+              title={
+                isInWatchLater
+                  ? "Remove from Watch Later"
+                  : "Add to Watch Later"
+              }
+            >
+              <Clock className="size-3" />
+            </div>
+
+            <div
+              onClick={(e) => {
+                e.stopPropagation();
+                togglePlaylistVideo("favourite", video.id);
+              }}
+              className={`cursor-pointer rounded-lg p-1.5 transition ${
+                isInFavourite
+                  ? "bg-yellow-500/20 text-yellow-400"
+                  : "text-muted hover:bg-surface-hover hover:text-foreground"
+              }`}
+              title={
+                isInFavourite ? "Remove from Favorites" : "Add to Favorites"
+              }
+            >
+              <Star
+                className={`size-3 ${isInFavourite ? "fill-current" : ""}`}
+              />
+            </div>
+
+            <div
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowExplorer(true);
+              }}
+              className="cursor-pointer rounded-lg p-1.5 text-muted transition hover:bg-surface-hover hover:text-foreground"
+              title="Inspect .adaumc Container Assets"
+            >
+              <Sparkles className="size-3" />
+            </div>
+
+            <div
+              onClick={(e) => {
+                e.stopPropagation();
+                if (
+                  confirm(`Are you sure you want to delete "${video.title}"?`)
+                ) {
                   deleteVideo(video.id);
                 }
               }}
-              className="p-1.5 rounded-lg text-muted hover:bg-red-500/20 hover:text-red-400 transition cursor-pointer"
+              className="ml-auto cursor-pointer rounded-lg p-1.5 text-muted transition hover:bg-red-500/20 hover:text-red-400"
               title="Delete Video"
             >
-              <Trash2 className="w-4 h-4" />
-            </button>
+              <Trash2 className="size-3" />
+            </div>
           </div>
         </div>
       </div>

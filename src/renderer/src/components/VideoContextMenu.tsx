@@ -183,7 +183,9 @@ export const VideoContextMenu: React.FC<VideoContextMenuProps> = ({
   };
 
   // ─── Separator ───────────────────────────────────────────────────────────
-  const Sep = () => <div className="border-border/60 my-1 border-t" />;
+  const Sep = () => (
+    <div className="border-border/50 my-1 border-t opacity-50" />
+  );
 
   // ─── Menu Item ───────────────────────────────────────────────────────────
   const Item = ({
@@ -205,11 +207,11 @@ export const VideoContextMenu: React.FC<VideoContextMenuProps> = ({
   }) => (
     <button
       onClick={onClick}
-      className={`group flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 py-1.5 text-left text-xs transition ${
+      className={`group flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1 text-left text-xs transition ${
         danger
           ? "text-rose-500 hover:bg-rose-500/10"
           : active
-            ? "bg-primary/8 text-primary-text hover:bg-primary/15"
+            ? "bg-primary/8 hover:bg-primary/15 text-primary-text"
             : "text-foreground hover:bg-surface-hover"
       }`}
     >
@@ -256,7 +258,7 @@ export const VideoContextMenu: React.FC<VideoContextMenuProps> = ({
   };
 
   const PlaylistPanel = () => (
-    <div className="mx-2 mb-1 mt-1 overflow-hidden rounded-lg border border-border bg-background/60">
+    <div className="bg-background/60 mx-2 mb-1 mt-1 overflow-hidden rounded-lg border border-border">
       {/* Existing playlists */}
       {userPlaylists.length === 0 && !isAddingPlaylist ? (
         <p className="px-3 py-2 text-[11px] italic text-muted">
@@ -271,7 +273,7 @@ export const VideoContextMenu: React.FC<VideoContextMenuProps> = ({
               onClick={() => togglePlaylistVideo(pl.id, video.id)}
               className={`flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-xs transition ${
                 isIn
-                  ? "bg-primary/5 text-primary-text hover:bg-primary/10"
+                  ? "bg-primary/5 hover:bg-primary/10 text-primary-text"
                   : "text-foreground hover:bg-surface-hover"
               }`}
             >
@@ -287,7 +289,7 @@ export const VideoContextMenu: React.FC<VideoContextMenuProps> = ({
 
       {/* Create playlist row */}
       {isAddingPlaylist ? (
-        <div className="flex items-center gap-1.5 border-t border-border/40 bg-background/30 px-3 py-1.5">
+        <div className="border-border/40 bg-background/30 flex items-center gap-1.5 border-t px-3 py-1.5">
           <input
             ref={newPlaylistInputRef}
             type="text"
@@ -318,7 +320,7 @@ export const VideoContextMenu: React.FC<VideoContextMenuProps> = ({
             e.stopPropagation();
             setIsAddingPlaylist(true);
           }}
-          className="flex w-full cursor-pointer items-center gap-2 border-t border-border/40 px-3 py-1.5 text-xs text-muted transition hover:bg-surface-hover hover:text-primary-text"
+          className="border-border/40 flex w-full cursor-pointer items-center gap-2 border-t px-3 py-1.5 text-xs text-muted transition hover:bg-surface-hover hover:text-primary-text"
         >
           <Plus className="h-3 w-3 shrink-0" />
           <span className="font-medium">New playlist…</span>
@@ -329,9 +331,9 @@ export const VideoContextMenu: React.FC<VideoContextMenuProps> = ({
 
   // ─── Tag sub-panel ───────────────────────────────────────────────────────
   const TagPanel = () => (
-    <div className="mx-2 mb-1 mt-1 overflow-hidden rounded-lg border border-border bg-background/60">
+    <div className="bg-background/60 mx-2 mb-1 mt-1 overflow-hidden rounded-lg border border-border">
       {/* Search input */}
-      <div className="relative border-b border-border/60 px-2 py-1.5">
+      <div className="border-border/60 relative border-b px-2 py-1.5">
         <Search className="pointer-events-none absolute left-4 top-1/2 h-3 w-3 -translate-y-1/2 text-muted" />
         <input
           ref={tagSearchRef}
@@ -341,7 +343,7 @@ export const VideoContextMenu: React.FC<VideoContextMenuProps> = ({
           placeholder="Search tags…"
           onClick={(e) => e.stopPropagation()}
           onKeyDown={(e) => e.stopPropagation()}
-          className="w-full rounded border border-border bg-background py-0.5 pl-6 pr-6 text-[11px] text-foreground placeholder-muted/60 focus:border-primary focus:outline-none"
+          className="placeholder-muted/60 w-full rounded border border-border bg-background py-0.5 pl-6 pr-6 text-[11px] text-foreground focus:border-primary focus:outline-none"
         />
         {tagSearch && (
           <button
@@ -377,7 +379,7 @@ export const VideoContextMenu: React.FC<VideoContextMenuProps> = ({
                 }}
                 className={`flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-xs transition ${
                   isOn
-                    ? "bg-primary/5 text-primary-text hover:bg-primary/10"
+                    ? "bg-primary/5 hover:bg-primary/10 text-primary-text"
                     : "text-foreground hover:bg-surface-hover"
                 }`}
               >
@@ -399,7 +401,7 @@ export const VideoContextMenu: React.FC<VideoContextMenuProps> = ({
 
       {/* Add tag row */}
       {isAddingTag ? (
-        <div className="flex items-center gap-1.5 border-t border-border/40 bg-background/30 px-3 py-1.5">
+        <div className="border-border/40 bg-background/30 flex items-center gap-1.5 border-t px-3 py-1.5">
           <input
             ref={newTagInputRef}
             type="text"
@@ -429,7 +431,7 @@ export const VideoContextMenu: React.FC<VideoContextMenuProps> = ({
             e.stopPropagation();
             setIsAddingTag(true);
           }}
-          className="flex w-full cursor-pointer items-center gap-2 border-t border-border/40 px-3 py-1.5 text-xs text-muted transition hover:bg-surface-hover hover:text-primary-text"
+          className="border-border/40 flex w-full cursor-pointer items-center gap-2 border-t px-3 py-1.5 text-xs text-muted transition hover:bg-surface-hover hover:text-primary-text"
         >
           <Plus className="h-3 w-3 shrink-0" />
           <span className="font-medium">New tag…</span>
@@ -448,30 +450,54 @@ export const VideoContextMenu: React.FC<VideoContextMenuProps> = ({
       }`}
     >
       {/* ── Header ── */}
-      <div className="border-b border-border bg-background/40 px-3 pb-2 pt-2.5">
-        <p className="line-clamp-1 text-xs font-bold text-foreground">
-          {video.title}
-        </p>
-        <p className="mt-0.5 text-[10px] text-muted">
-          {video.resolution} · {formatDuration(video.duration)} ·{" "}
-          {video.playCount || 0} views
-        </p>
+      <div className="bg-background/40 select-none border-b border-border px-2 py-1">
+        {/* Title Row Marquee */}
+        <div className="relative flex overflow-x-hidden">
+          <div className="animate-marquee flex gap-4 whitespace-nowrap pr-4 text-xs font-bold text-foreground">
+            <span>{video.title}</span>
+          </div>
+          <div
+            className="animate-marquee absolute left-0 top-0 flex gap-4 whitespace-nowrap pr-4 text-xs font-bold text-foreground"
+            aria-hidden="true"
+          >
+            <span>{video.title}</span>
+          </div>
+        </div>
+
+        {/* Subtitle Row Marquee */}
+        <div className="relative mt-0.5 flex overflow-x-hidden">
+          <div className="animate-marquee flex gap-3 whitespace-nowrap pr-3 text-[10px] text-muted">
+            <span>
+              {video.resolution} · {formatDuration(video.duration)} ·{" "}
+              {video.playCount || 0} views
+            </span>
+          </div>
+          <div
+            className="animate-marquee absolute left-0 top-0 flex gap-3 whitespace-nowrap pr-3 text-[10px] text-muted"
+            aria-hidden="true"
+          >
+            <span>
+              {video.resolution} · {formatDuration(video.duration)} ·{" "}
+              {video.playCount || 0} views
+            </span>
+          </div>
+        </div>
       </div>
 
       <div className="px-1 py-1">
         {/* ── Playback ── */}
         <Item
-          icon={<Play className="h-3.5 w-3.5" />}
+          icon={<Play className="size-3" />}
           label="Play"
           onClick={() => run(() => setPlayingVideo(video))}
         />
         <Item
-          icon={<Info className="h-3.5 w-3.5" />}
+          icon={<Info className="size-3" />}
           label="Show Details"
           onClick={() => run(() => setSelectedVideoId(video.id))}
         />
         <Item
-          icon={<HardDrive className="h-3.5 w-3.5" />}
+          icon={<HardDrive className="size-3" />}
           label="Inspect Bundle"
           onClick={() => run(onInspectBundle)}
         />
