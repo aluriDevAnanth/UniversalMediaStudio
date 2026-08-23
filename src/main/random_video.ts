@@ -3,7 +3,7 @@ import fs from "fs";
 import { app } from "electron";
 import { FFmpegProcessor, SpriteProgressUpdate, makeLog } from "./ffmpeg_worker";
 import { BundleManager } from "./bundle_manager";
-import { db } from "./db";
+import { db, VideoRecord } from "./db";
 import { ConcurrentPacker } from "./concurrent_packer";
 
 export interface ProgressUpdate {
@@ -17,6 +17,8 @@ export interface ProgressUpdate {
   log: string;
   etaSeconds: number | null;
 }
+
+export type ImportProgress = ProgressUpdate;
 
 export const activeImportTasks = new Map<string, { videoId: string; isCancelled: boolean }>();
 

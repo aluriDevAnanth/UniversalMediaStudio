@@ -47,12 +47,30 @@ const api = {
   },
   tags: {
     get: () => ipcRenderer.invoke("tags:get"),
-    add: (tag: string) => ipcRenderer.invoke("tags:add", tag),
+    getMetadata: () => ipcRenderer.invoke("tags:getMetadata"),
+    setMetadata: (name: string, color: string, category?: string) =>
+      ipcRenderer.invoke("tags:setMetadata", name, color, category),
+    getCategoryColors: () => ipcRenderer.invoke("tags:getCategoryColors"),
+    setCategoryColor: (category: string, color: string) =>
+      ipcRenderer.invoke("tags:setCategoryColor", category, color),
+    add: (tag: string, color?: string, category?: string) =>
+      ipcRenderer.invoke("tags:add", tag, color, category),
     delete: (tag: string) => ipcRenderer.invoke("tags:delete", tag),
     rename: (oldTag: string, newTag: string) =>
       ipcRenderer.invoke("tags:rename", oldTag, newTag),
     updateVideo: (videoId: string, tags: string[]) =>
       ipcRenderer.invoke("tags:updateVideo", videoId, tags),
+    bulkUpdateVideos: (
+      videoIds: string[],
+      addTags: string[],
+      removeTags: string[],
+    ) =>
+      ipcRenderer.invoke(
+        "tags:bulkUpdateVideos",
+        videoIds,
+        addTags,
+        removeTags,
+      ),
   },
   analytics: {
     get: () => ipcRenderer.invoke("analytics:get"),

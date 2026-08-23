@@ -31,6 +31,8 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 function createWindow(): void {
+  const iconPath = path.join(__dirname, "../../resources/icon.png");
+
   const mainWindow = new BrowserWindow({
     width: 1280,
     height: 820,
@@ -38,6 +40,7 @@ function createWindow(): void {
     minHeight: 650,
     show: false,
     frame: false,
+    icon: fs.existsSync(iconPath) ? iconPath : undefined,
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.js"),
       sandbox: false,
@@ -152,13 +155,30 @@ app.whenReady().then(() => {
   );
 
   ipcMain.handle("tags:get", () => db.getTags());
-  ipcMain.handle("tags:add", (_, tag: string) => db.addTag(tag));
+  ipcMain.handle("tags:getMetadata", () => db.getTagMetadata());
+  ipcMain.handle(
+    "tags:setMetadata",
+    (_, name: string, color: string, category?: string) =>
+      db.setTagMetadata(name, color, category),
+  );
+  ipcMain.handle("tags:getCategoryColors", () => db.getCategoryColors());
+  ipcMain.handle("tags:setCategoryColor", (_, category: string, color: string) =>
+    db.setCategoryColor(category, color),
+  );
+  ipcMain.handle("tags:add", (_, tag: string, color?: string, category?: string) =>
+    db.addTag(tag, color, category),
+  );
   ipcMain.handle("tags:delete", (_, tag: string) => db.deleteTag(tag));
   ipcMain.handle("tags:rename", (_, oldTag: string, newTag: string) =>
     db.renameTag(oldTag, newTag),
   );
   ipcMain.handle("tags:updateVideo", (_, videoId: string, tags: string[]) =>
     db.updateVideoTags(videoId, tags),
+  );
+  ipcMain.handle(
+    "tags:bulkUpdateVideos",
+    (_, videoIds: string[], addTags: string[], removeTags: string[]) =>
+      db.bulkUpdateVideoTags(videoIds, addTags, removeTags),
   );
 
   ipcMain.handle("analytics:get", () => db.getAnalytics());
