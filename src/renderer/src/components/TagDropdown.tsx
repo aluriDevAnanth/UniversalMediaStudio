@@ -10,18 +10,15 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { useVideoStore } from "../store/videoStore";
-import {
-  parseTag,
-  formatTag,
-  getCategoryColor,
-  getTagStyle,
-} from "../utils/tagColors";
+import { parseTag, formatTag, getCategoryColor } from "../utils/tagColors";
+import { TagBadge } from "./TagBadge";
 
 interface TagDropdownProps {
   selectedTags: string[];
   onChange: (tags: string[]) => void;
   placeholder?: string;
   mode?: "filter" | "editor";
+  className?: string;
 }
 
 export const TagDropdown: React.FC<TagDropdownProps> = ({
@@ -29,14 +26,10 @@ export const TagDropdown: React.FC<TagDropdownProps> = ({
   onChange,
   placeholder,
   mode = "filter",
+  className = "",
 }) => {
-  const {
-    tags,
-    categoryColors,
-    tagMatchMode,
-    setTagMatchMode,
-    addTag,
-  } = useVideoStore();
+  const { tags, categoryColors, tagMatchMode, setTagMatchMode, addTag } =
+    useVideoStore();
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [searchTagQuery, setSearchTagQuery] = useState("");
@@ -48,7 +41,10 @@ export const TagDropdown: React.FC<TagDropdownProps> = ({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const listContainerRef = useRef<HTMLDivElement>(null);
 
-  const [portalCoords, setPortalCoords] = useState<{ top: number; left: number }>({
+  const [portalCoords, setPortalCoords] = useState<{
+    top: number;
+    left: number;
+  }>({
     top: 0,
     left: 0,
   });
@@ -60,8 +56,8 @@ export const TagDropdown: React.FC<TagDropdownProps> = ({
     const updateCoords = () => {
       if (!triggerRef.current) return;
       const rect = triggerRef.current.getBoundingClientRect();
-      const panelHeight = 320;
-      const panelWidth = 260;
+      const panelHeight = 340;
+      const panelWidth = 280;
 
       let top = rect.bottom + 6;
       if (
@@ -105,29 +101,35 @@ export const TagDropdown: React.FC<TagDropdownProps> = ({
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // Filter tags based on search input (supports browser `#` syntax: #Category or #Category:Tag)
-  const filteredTags = [...tags].sort((a, b) => a.localeCompare(b)).filter((t) => {
-    if (!searchTagQuery) return true;
-    const q = searchTagQuery.trim();
+  // Filter tags based on search input (supports `#` syntax: #Category or #Category:Tag)
+  const filteredTags = [...tags]
+    .sort((a, b) => a.localeCompare(b))
+    .filter((t) => {
+      if (!searchTagQuery) return true;
+      const q = searchTagQuery.trim();
 
-    if (q.startsWith("#")) {
-      const clean = q.slice(1);
-      if (clean.includes(":")) {
-        const [catSearch, tagSearch] = clean.split(":");
-        const { category, name } = parseTag(t);
-        const matchesCat = category.toLowerCase().includes(catSearch.toLowerCase());
-        const matchesTag = name.toLowerCase().includes(tagSearch.toLowerCase());
-        return matchesCat && matchesTag;
-      } else {
-        const { category } = parseTag(t);
-        return category.toLowerCase().includes(clean.toLowerCase());
+      if (q.startsWith("#")) {
+        const clean = q.slice(1);
+        if (clean.includes(":")) {
+          const [catSearch, tagSearch] = clean.split(":");
+          const { category, name } = parseTag(t);
+          const matchesCat = category
+            .toLowerCase()
+            .includes(catSearch.toLowerCase());
+          const matchesTag = name
+            .toLowerCase()
+            .includes(tagSearch.toLowerCase());
+          return matchesCat && matchesTag;
+        } else {
+          const { category } = parseTag(t);
+          return category.toLowerCase().includes(clean.toLowerCase());
+        }
       }
-    }
 
-    const { category, name } = parseTag(t);
-    const textSearch = `${category} ${name}`.toLowerCase();
-    return textSearch.includes(q.toLowerCase());
-  });
+      const { category, name } = parseTag(t);
+      const textSearch = `${category} ${name}`.toLowerCase();
+      return textSearch.includes(q.toLowerCase());
+    });
 
   // Group tags for display
   const groupedFilteredTags: Record<string, string[]> = {};
@@ -139,11 +141,11 @@ export const TagDropdown: React.FC<TagDropdownProps> = ({
     groupedFilteredTags[category].push(t);
   }
 
-  // Truncation logic for trigger pill display
+  // Truncation logic for filter mode trigger pill display
   const getVisibleSelectedTags = () => {
     let currentLength = 0;
     const visible: string[] = [];
-    const maxLength = 22;
+    const maxLength = 24;
 
     for (const t of selectedTags) {
       if (currentLength + t.length + 2 > maxLength) {
@@ -159,63 +161,85 @@ export const TagDropdown: React.FC<TagDropdownProps> = ({
   const { visible: visibleSelected, remaining: remainingSelected } =
     getVisibleSelectedTags();
 
+  const handleToggleTag = (tag: string) => {
+    if (selectedTags.includes(tag)) {
+      onChange(selectedTags.filter((t) => t !== tag));
+    } else {
+      onChange([...selectedTags, tag]);
+    }
+  };
+
   return (
-    <div className="relative shrink-0">
-      {/* Trigger Button */}
-      <button
-        ref={triggerRef}
-        onClick={() => setDropdownOpen((o) => !o)}
-        className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer max-w-[280px] overflow-hidden ${
-          selectedTags.length > 0
-            ? "bg-primary/15 text-primary-text border border-primary-border/40"
-            : "bg-background text-muted hover:text-foreground hover:bg-surface-hover border border-border"
-        }`}
-      >
-        <Tag className="w-3.5 h-3.5 shrink-0" />
+    <div className={`relative shrink-0 ${className}`}>
+      {/* Trigger Button - Mode Specific */}
+      {mode === "editor" ? (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {selectedTags.map((t) => (
+            <TagBadge
+              key={t}
+              rawTag={t}
+              size="sm"
+              onRemove={() => onChange(selectedTags.filter((tag) => tag !== t))}
+            />
+          ))}
 
-        {selectedTags.length === 0 ? (
-          <span className="truncate">{placeholder || "Select tags..."}</span>
-        ) : (
-          <div className="flex items-center gap-1 overflow-hidden truncate">
-            {visibleSelected.map((t) => {
-              const { category, name } = parseTag(t);
-              const color = getCategoryColor(category, categoryColors);
-              const style = getTagStyle(color);
-              return (
-                <span
-                  key={t}
-                  style={style}
-                  className="px-1.5 py-0.5 rounded text-[10px] shrink-0 font-semibold border"
-                >
-                  {category}:{name}
-                </span>
-              );
-            })}
-            {remainingSelected > 0 && (
-              <span className="text-[10px] font-bold text-primary-text shrink-0 bg-primary/20 px-1.5 py-0.5 rounded">
-                +{remainingSelected}
-              </span>
-            )}
-          </div>
-        )}
-
-        {selectedTags.length > 0 ? (
-          <span
-            onClick={(e) => {
-              e.stopPropagation();
-              onChange([]);
-            }}
-            className="p-0.5 hover:bg-primary/20 rounded cursor-pointer shrink-0 ml-1.5"
-            title="Clear tags"
+          <button
+            ref={triggerRef}
+            type="button"
+            onClick={() => setDropdownOpen((o) => !o)}
+            className="border-border hover:border-primary/50 bg-surface hover:bg-surface-hover text-muted hover:text-foreground inline-flex cursor-pointer items-center gap-1 rounded-lg border border-dashed px-2 py-1 text-xs font-semibold transition"
           >
-            <X className="w-3 h-3" />
-          </span>
-        ) : (
-          <ChevronDown
-            className={`w-3 h-3 transition-transform shrink-0 ml-1.5 ${dropdownOpen ? "rotate-180" : ""}`}
-          />
-        )}
-      </button>
+            <Plus className="h-3 w-3" />
+            <span>Add Tag</span>
+          </button>
+        </div>
+      ) : (
+        /* Filter mode trigger */
+        <button
+          ref={triggerRef}
+          type="button"
+          onClick={() => setDropdownOpen((o) => !o)}
+          className={`flex max-w-[280px] cursor-pointer items-center gap-2 overflow-hidden rounded-xl px-2.5 py-1.5 text-xs font-medium transition ${
+            selectedTags.length > 0
+              ? "bg-primary/15 text-primary-text border-primary-border/40 border"
+              : "bg-background text-muted hover:text-foreground hover:bg-surface-hover border-border border"
+          }`}
+        >
+          <Tag className="h-3.5 w-3.5 shrink-0" />
+
+          {selectedTags.length === 0 ? (
+            <span className="truncate">{placeholder || "All Tags"}</span>
+          ) : (
+            <div className="flex items-center gap-1 truncate overflow-hidden">
+              {visibleSelected.map((t) => (
+                <TagBadge key={t} rawTag={t} size="xs" />
+              ))}
+              {remainingSelected > 0 && (
+                <span className="text-primary-text bg-primary/20 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold">
+                  +{remainingSelected}
+                </span>
+              )}
+            </div>
+          )}
+
+          {selectedTags.length > 0 ? (
+            <span
+              onClick={(e) => {
+                e.stopPropagation();
+                onChange([]);
+              }}
+              className="hover:bg-primary/20 ml-1.5 shrink-0 cursor-pointer rounded p-0.5"
+              title="Clear tags"
+            >
+              <X className="h-3 w-3" />
+            </span>
+          ) : (
+            <ChevronDown
+              className={`ml-1.5 h-3 w-3 shrink-0 transition-transform ${dropdownOpen ? "rotate-180" : ""}`}
+            />
+          )}
+        </button>
+      )}
 
       {/* Render Dropdown via React Portal */}
       {dropdownOpen &&
@@ -226,22 +250,22 @@ export const TagDropdown: React.FC<TagDropdownProps> = ({
               position: "fixed",
               top: portalCoords.top,
               left: portalCoords.left,
-              width: 270,
+              width: 280,
               zIndex: 9999,
             }}
-            className="bg-surface border border-border rounded-xl shadow-2xl overflow-hidden animate-fade-in flex flex-col"
+            className="bg-surface border-border animate-fade-in flex flex-col overflow-hidden rounded-xl border shadow-2xl"
           >
             {/* Search Bar */}
-            <div className="p-2 border-b border-border flex flex-col gap-1.5 bg-background/40">
+            <div className="border-border bg-background/40 flex flex-col gap-1.5 border-b p-2">
               <div className="flex items-center justify-between gap-1.5">
                 <div className="relative flex-1">
-                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+                  <Search className="text-muted pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2" />
                   <input
                     type="text"
                     value={searchTagQuery}
                     onChange={(e) => setSearchTagQuery(e.target.value)}
                     placeholder="Search or #Category:Tag..."
-                    className="w-full pl-8 pr-6 py-1 bg-background border border-border rounded-lg text-xs text-foreground focus:outline-none focus:border-primary placeholder-muted/60"
+                    className="bg-background border-border text-foreground focus:border-primary placeholder-muted/60 w-full rounded-lg border py-1 pr-6 pl-8 text-xs focus:outline-none"
                     onClick={(e) => e.stopPropagation()}
                     autoFocus
                   />
@@ -251,9 +275,9 @@ export const TagDropdown: React.FC<TagDropdownProps> = ({
                         e.stopPropagation();
                         setSearchTagQuery("");
                       }}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-foreground cursor-pointer"
+                      className="text-muted hover:text-foreground absolute top-1/2 right-2 -translate-y-1/2 cursor-pointer"
                     >
-                      <X className="w-3 h-3" />
+                      <X className="h-3 w-3" />
                     </button>
                   )}
                 </div>
@@ -263,7 +287,7 @@ export const TagDropdown: React.FC<TagDropdownProps> = ({
                       e.stopPropagation();
                       onChange([]);
                     }}
-                    className="text-[10px] text-primary-text hover:underline cursor-pointer shrink-0"
+                    className="text-primary-text shrink-0 cursor-pointer text-[10px] hover:underline"
                   >
                     Clear
                   </button>
@@ -272,18 +296,19 @@ export const TagDropdown: React.FC<TagDropdownProps> = ({
 
               {/* Boolean Match Mode Switcher (ANY vs ALL) - in filter mode */}
               {mode === "filter" && selectedTags.length > 1 && (
-                <div className="flex items-center justify-between bg-surface p-1 rounded-lg border border-border/60 text-[10px]">
-                  <span className="flex items-center gap-1 text-muted font-medium pl-1">
-                    <SlidersHorizontal className="w-3 h-3 text-primary-text" />
+                <div className="bg-surface border-border/60 flex items-center justify-between rounded-lg border p-1 text-[10px]">
+                  <span className="text-muted flex items-center gap-1 pl-1 font-medium">
+                    <SlidersHorizontal className="text-primary-text h-3 w-3" />
                     Match Mode:
                   </span>
-                  <div className="flex bg-background rounded p-0.5 border border-border/40">
+                  <div className="bg-background border-border/40 flex rounded border p-0.5">
                     <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         setTagMatchMode("ANY");
                       }}
-                      className={`px-2 py-0.5 rounded font-bold transition cursor-pointer ${
+                      className={`cursor-pointer rounded px-2 py-0.5 font-bold transition ${
                         tagMatchMode === "ANY"
                           ? "bg-primary text-white shadow"
                           : "text-muted hover:text-foreground"
@@ -293,11 +318,12 @@ export const TagDropdown: React.FC<TagDropdownProps> = ({
                       ANY (OR)
                     </button>
                     <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         setTagMatchMode("ALL");
                       }}
-                      className={`px-2 py-0.5 rounded font-bold transition cursor-pointer ${
+                      className={`cursor-pointer rounded px-2 py-0.5 font-bold transition ${
                         tagMatchMode === "ALL"
                           ? "bg-primary text-white shadow"
                           : "text-muted hover:text-foreground"
@@ -314,11 +340,12 @@ export const TagDropdown: React.FC<TagDropdownProps> = ({
             {/* Tag List Grouped by Category */}
             <div
               ref={listContainerRef}
-              className="max-h-56 overflow-y-auto py-1 flex-1 space-y-2 px-1"
+              className="max-h-60 flex-1 space-y-2.5 overflow-y-auto px-1.5 py-2"
             >
               {Object.keys(groupedFilteredTags).length === 0 ? (
-                <div className="px-3 py-4 text-center text-xs text-muted">
-                  No tags found.
+                <div className="text-muted px-3 py-6 text-center text-xs">
+                  <p>No tags found.</p>
+                  <p className="mt-1 text-[10px]">Click "+" below to create one.</p>
                 </div>
               ) : (
                 Object.keys(groupedFilteredTags).map((cat) => {
@@ -326,54 +353,55 @@ export const TagDropdown: React.FC<TagDropdownProps> = ({
                   const catTags = groupedFilteredTags[cat];
 
                   return (
-                    <div key={cat} className="space-y-0.5">
-                      <div className="flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-muted">
+                    <div key={cat} className="space-y-1">
+                      <div className="text-muted flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-extrabold tracking-wider uppercase">
                         <span
-                          className="w-2 h-2 rounded-full shrink-0"
+                          className="h-2 w-2 shrink-0 rounded-full"
                           style={{ backgroundColor: catColor }}
                         />
                         {cat}
                       </div>
 
-                      {catTags.map((t) => {
-                        const checked = selectedTags.includes(t);
-                        const { name } = parseTag(t);
+                      <div className="flex flex-col gap-0.5">
+                        {catTags.map((t) => {
+                          const checked = selectedTags.includes(t);
 
-                        return (
-                          <div
-                            key={t}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (checked) {
-                                onChange(selectedTags.filter((tag) => tag !== t));
-                              } else {
-                                onChange([...selectedTags, t]);
-                              }
-                            }}
-                            className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition cursor-pointer ${
-                              checked
-                                ? "text-primary-text bg-primary/10 font-bold"
-                                : "text-foreground hover:bg-surface-hover"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span
-                                className={`w-3.5 h-3.5 rounded flex items-center justify-center shrink-0 transition ${
-                                  checked
-                                    ? "bg-primary text-white"
-                                    : "bg-background border border-border"
-                                }`}
-                              >
-                                {checked && <Check className="w-2.5 h-2.5" />}
-                              </span>
+                          return (
+                            <div
+                              key={t}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleTag(t);
+                              }}
+                              className={`flex w-full cursor-pointer items-center justify-between rounded-lg px-2 py-1.5 text-xs transition ${
+                                checked
+                                  ? "bg-primary/15 text-primary-text font-semibold"
+                                  : "text-foreground hover:bg-surface-hover"
+                              }`}
+                            >
+                              <div className="flex min-w-0 items-center gap-2">
+                                <span
+                                  className={`flex h-4 w-4 shrink-0 items-center justify-center rounded transition ${
+                                    checked
+                                      ? "bg-primary text-white"
+                                      : "bg-background border-border border"
+                                  }`}
+                                >
+                                  {checked && <Check className="h-3 w-3" />}
+                                </span>
 
-                              <span className="truncate">
-                                {cat}:{name}
-                              </span>
+                                <TagBadge
+                                  rawTag={t}
+                                  size="sm"
+                                  showDot
+                                  searchQuery={searchTagQuery}
+                                  selected={checked}
+                                />
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
                     </div>
                   );
                 })
@@ -381,19 +409,39 @@ export const TagDropdown: React.FC<TagDropdownProps> = ({
 
               {/* Quick Add Tag Row */}
               {isAddingTag && (
-                <div className="px-2 py-2 border-t border-border bg-background/50 flex flex-col gap-1.5">
-                  <div className="text-[10px] font-bold text-muted uppercase">
-                    Quick Create Tag
+                <div className="border-border bg-background/70 animate-in fade-in flex flex-col gap-1.5 rounded-lg border p-2 duration-150">
+                  <div className="flex w-full items-center justify-between">
+                    <div className="text-muted text-[10px] font-bold uppercase">
+                      Create New Tag
+                    </div>
+                    <button
+                      type="button"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        const cat = newCatInputValue.trim() || "General";
+                        const nm = newNameInputValue.trim();
+                        if (nm) {
+                          const formatted = formatTag(cat, nm);
+                          await addTag(formatted);
+                          onChange([...selectedTags, formatted]);
+                          setNewNameInputValue("");
+                        }
+                        setIsAddingTag(false);
+                      }}
+                      className="bg-primary hover:bg-primary-hover cursor-pointer rounded px-2 py-0.5 text-xs font-bold text-white shadow-xs"
+                    >
+                      Save
+                    </button>
                   </div>
-                  <div className="flex gap-1">
+                  <div className="flex items-center gap-1">
                     <input
                       type="text"
                       value={newCatInputValue}
                       onChange={(e) => setNewCatInputValue(e.target.value)}
                       placeholder="Category"
-                      className="w-20 text-xs bg-background border border-border rounded px-1.5 py-0.5 text-foreground focus:outline-none"
+                      className="bg-surface border-border text-foreground w-20 rounded-md border px-2 py-1 text-xs focus:outline-none"
                     />
-                    <span className="text-xs font-bold text-muted">:</span>
+                    <span className="text-muted text-xs font-bold">:</span>
                     <input
                       type="text"
                       value={newNameInputValue}
@@ -417,48 +465,33 @@ export const TagDropdown: React.FC<TagDropdownProps> = ({
                           setIsAddingTag(false);
                         }
                       }}
-                      className="flex-1 text-xs bg-background border border-border rounded px-1.5 py-0.5 text-foreground focus:outline-none font-semibold"
+                      className="bg-surface border-border text-foreground flex-1 rounded-md border px-2 py-1 text-xs font-semibold focus:outline-none"
                     />
-                    <button
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        const cat = newCatInputValue.trim() || "General";
-                        const nm = newNameInputValue.trim();
-                        if (nm) {
-                          const formatted = formatTag(cat, nm);
-                          await addTag(formatted);
-                          onChange([...selectedTags, formatted]);
-                          setNewNameInputValue("");
-                        }
-                        setIsAddingTag(false);
-                      }}
-                      className="px-2 py-0.5 bg-primary text-white text-xs font-bold rounded hover:bg-primary-hover cursor-pointer"
-                    >
-                      Add
-                    </button>
                   </div>
                 </div>
               )}
             </div>
 
             {/* Footer */}
-            <div className="px-3 py-1.5 border-t border-border bg-background/40 flex items-center justify-between">
-              <span className="text-[10px] text-muted font-medium">
+            <div className="border-border bg-background/40 flex items-center justify-between border-t px-3 py-2">
+              <span className="text-muted text-[10px] font-medium">
                 {selectedTags.length} of {tags.length} selected
               </span>
               <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   setIsAddingTag((prev) => !prev);
                 }}
-                className="p-1 hover:bg-primary/10 text-primary-text rounded-lg transition cursor-pointer flex items-center justify-center"
-                title="Quick Add new tag"
+                className="hover:bg-primary/15 text-primary-text flex cursor-pointer items-center gap-1 rounded-lg px-2 py-1 text-xs font-bold transition"
+                title="Create a new tag"
               >
-                <Plus className="w-3.5 h-3.5" />
+                <Plus className="h-3.5 w-3.5" />
+                <span>New Tag</span>
               </button>
             </div>
           </div>,
-          document.body
+          document.body,
         )}
     </div>
   );

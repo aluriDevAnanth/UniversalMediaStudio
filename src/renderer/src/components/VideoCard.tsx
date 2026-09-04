@@ -4,12 +4,8 @@ import { VideoRecord } from "../env";
 import { useVideoStore } from "../store/videoStore";
 import { BundleExplorerModal } from "./BundleExplorerModal";
 import { VideoContextMenu } from "./VideoContextMenu";
-import {
-  parseTag,
-  getCategoryColor,
-  getTagStyle,
-  HighlightText,
-} from "../utils/tagColors";
+import { TagBadge } from "./TagBadge";
+import { HighlightText } from "../utils/tagColors";
 
 interface VideoCardProps {
   video: VideoRecord;
@@ -31,7 +27,6 @@ export const VideoCard: React.FC<VideoCardProps> = ({ video }) => {
     setSelectedVideoId,
     selectedVideoIds,
     toggleVideoSelection,
-    categoryColors,
     searchQuery,
   } = useVideoStore();
 
@@ -87,6 +82,10 @@ export const VideoCard: React.FC<VideoCardProps> = ({ video }) => {
       >
         <div className="relative aspect-video overflow-hidden bg-black/60">
           <img
+            onClick={(e) => {
+              e.stopPropagation();
+              setPlayingVideo(video);
+            }}
             src={isHovered ? animatedGifUrl : staticThumbUrl}
             alt={video.title}
             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
@@ -109,7 +108,11 @@ export const VideoCard: React.FC<VideoCardProps> = ({ video }) => {
                 ? "border-primary bg-primary text-white shadow-md"
                 : "border-white/30 bg-black/50 text-transparent opacity-0 group-hover:opacity-100"
             }`}
-            title={isMultiSelected ? "Deselect video" : "Select video for bulk actions"}
+            title={
+              isMultiSelected
+                ? "Deselect video"
+                : "Select video for bulk actions"
+            }
           >
             <Check className="h-3.5 w-3.5 stroke-[3]" />
           </div>
@@ -154,21 +157,14 @@ export const VideoCard: React.FC<VideoCardProps> = ({ video }) => {
               {video.tags.length === 0 ? (
                 <span className="text-[10px] text-muted">No Tags</span>
               ) : (
-                video.tags.slice(0, 3).map((t) => {
-                  const { category, name } = parseTag(t);
-                  const color = getCategoryColor(category, categoryColors);
-                  const style = getTagStyle(color);
-                  const tagText = `${category}:${name}`;
-                  return (
-                    <span
-                      key={t}
-                      style={style}
-                      className="rounded border px-1.5 py-0.2 text-[9px] font-semibold"
-                    >
-                      <HighlightText text={tagText} query={searchQuery} />
-                    </span>
-                  );
-                })
+                video.tags.slice(0, 3).map((t) => (
+                  <TagBadge
+                    key={t}
+                    rawTag={t}
+                    size="xs"
+                    searchQuery={searchQuery}
+                  />
+                ))
               )}
               {video.tags.length > 3 && (
                 <span className="text-[9px] font-bold text-muted">
