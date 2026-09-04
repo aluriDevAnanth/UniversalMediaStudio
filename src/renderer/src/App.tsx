@@ -11,7 +11,9 @@ import { StorageManager } from "./components/StorageManager";
 import { AnalyticsView } from "./components/AnalyticsView";
 import { BundleExplorerModal } from "./components/BundleExplorerModal";
 import { TagManagerDialog } from "./components/TagManagerDialog";
+import { ShortcutsModal } from "./components/ShortcutsModal";
 import { ToastContainer } from "./components/ToastNotification";
+import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { VideoRecord } from "./env";
 import { Upload } from "lucide-react";
 
@@ -52,7 +54,6 @@ export default function App(): React.JSX.Element {
   const {
     isAuthenticated,
     checkAuthStatus,
-    videos,
     activeTab,
     playingVideo,
     setPlayingVideo,
@@ -108,11 +109,35 @@ export default function App(): React.JSX.Element {
     return undefined;
   }, []);
 
+  useGlobalShortcuts({
+    onOpenTagManager: () => setTagManagerOpen(true),
+    onCloseModals: () => {
+      if (playingVideo) {
+        setPlayingVideo(null);
+        return true;
+      }
+      if (explorerVideo) {
+        setExplorerVideo(null);
+        return true;
+      }
+      if (tagManagerOpen) {
+        setTagManagerOpen(false);
+        return true;
+      }
+      return false;
+    },
+  });
+
   useEffect(() => {
-    if (selectedVideoId && !videos.some((v) => v.id === selectedVideoId)) {
-      setSelectedVideoId(null);
-    }
-  }, [videos, selectedVideoId, setSelectedVideoId]);
+    const handleInspectBundle = (e: any) => {
+      if (e.detail) {
+        setExplorerVideo(e.detail);
+      }
+    };
+    window.addEventListener("inspect-video-bundle", handleInspectBundle);
+    return () =>
+      window.removeEventListener("inspect-video-bundle", handleInspectBundle);
+  }, []);
 
   if (!isAuthenticated) {
     return <LoginScreen />;
@@ -307,6 +332,9 @@ export default function App(): React.JSX.Element {
         open={tagManagerOpen}
         onClose={() => setTagManagerOpen(false)}
       />
+
+      {/* Keyboard Shortcuts Cheatsheet Modal */}
+      <ShortcutsModal />
 
       {/* Global Toast Container */}
       <ToastContainer />
