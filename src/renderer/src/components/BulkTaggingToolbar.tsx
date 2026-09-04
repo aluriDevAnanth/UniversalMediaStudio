@@ -2,20 +2,18 @@ import React, { useState, useRef, useEffect } from "react";
 import {
   CheckSquare,
   X,
-  Tag as TagIcon,
   Trash2,
   Plus,
   MinusCircle,
   ChevronUp,
 } from "lucide-react";
 import { useVideoStore } from "../store/videoStore";
-import { getTagColor, getTagStyle } from "../utils/tagColors";
+import { TagBadge } from "./TagBadge";
 
 export const BulkTaggingToolbar: React.FC = () => {
   const {
     videos,
     tags,
-    categoryColors,
     selectedVideoIds,
     clearVideoSelection,
     selectAllVideos,
@@ -126,24 +124,19 @@ export const BulkTaggingToolbar: React.FC = () => {
               </button>
             </form>
 
-            <div className="max-h-40 space-y-1 overflow-y-auto">
-              {tags.map((t) => {
-                const color = getTagColor(t, categoryColors);
-                const style = getTagStyle(color);
-                return (
-                  <button
-                    key={t}
-                    onClick={async () => {
-                      await bulkAddTag(t);
-                      setAddMenuOpen(false);
-                    }}
-                    style={style}
-                    className="flex w-full cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition hover:brightness-110"
-                  >
-                    <TagIcon className="h-3 w-3" />#{t}
-                  </button>
-                );
-              })}
+            <div className="max-h-48 space-y-1 overflow-y-auto">
+              {tags.map((t) => (
+                <div
+                  key={t}
+                  onClick={async () => {
+                    await bulkAddTag(t);
+                    setAddMenuOpen(false);
+                  }}
+                  className="hover:bg-surface-hover flex w-full cursor-pointer items-center justify-between rounded-lg p-1 transition"
+                >
+                  <TagBadge rawTag={t} size="sm" showDot />
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -156,7 +149,7 @@ export const BulkTaggingToolbar: React.FC = () => {
             setRemoveMenuOpen((o) => !o);
             setAddMenuOpen(false);
           }}
-          className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-muted transition hover:bg-surface-hover hover:text-foreground"
+          className="border-border bg-surface text-muted hover:bg-surface-hover hover:text-foreground flex cursor-pointer items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition"
         >
           <MinusCircle className="h-3.5 w-3.5" />
           Remove Tag
@@ -164,28 +157,23 @@ export const BulkTaggingToolbar: React.FC = () => {
         </button>
 
         {removeMenuOpen && (
-          <div className="absolute bottom-full left-0 mb-2 w-56 rounded-xl border border-border bg-surface p-2 shadow-2xl animate-fade-in">
-            <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-muted">
+          <div className="border-border bg-surface animate-fade-in absolute bottom-full left-0 mb-2 w-64 rounded-xl border p-2 shadow-2xl">
+            <div className="text-muted mb-2 text-[10px] font-bold tracking-wider uppercase">
               Remove Tag from {selectedVideoIds.length} items
             </div>
-            <div className="max-h-44 space-y-1 overflow-y-auto">
-              {tags.map((t) => {
-                const color = getTagColor(t, categoryColors);
-                const style = getTagStyle(color);
-                return (
-                  <button
-                    key={t}
-                    onClick={async () => {
-                      await bulkRemoveTag(t);
-                      setRemoveMenuOpen(false);
-                    }}
-                    style={style}
-                    className="flex w-full cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition hover:brightness-110"
-                  >
-                    <TagIcon className="h-3 w-3" />#{t}
-                  </button>
-                );
-              })}
+            <div className="max-h-48 space-y-1 overflow-y-auto">
+              {tags.map((t) => (
+                <div
+                  key={t}
+                  onClick={async () => {
+                    await bulkRemoveTag(t);
+                    setRemoveMenuOpen(false);
+                  }}
+                  className="hover:bg-surface-hover flex w-full cursor-pointer items-center justify-between rounded-lg p-1 transition"
+                >
+                  <TagBadge rawTag={t} size="sm" showDot />
+                </div>
+              ))}
             </div>
           </div>
         )}
