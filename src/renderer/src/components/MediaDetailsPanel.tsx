@@ -26,18 +26,18 @@ export const MediaDetailsPanel: React.FC<MediaDetailsPanelProps> = ({
   return (
     <div
       data-details-panel
-      className="flex h-full w-80 shrink-0 flex-col overflow-hidden border-l border-border bg-surface transition-all duration-300"
+      className="border-border bg-surface flex h-full w-80 shrink-0 flex-col overflow-hidden border-l transition-all duration-300"
     >
       <div className="flex h-full flex-1 flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-border p-4">
-          <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-foreground">
-            <Info className="h-4 w-4 text-primary-text" />
+        <div className="border-border flex items-center justify-between border-b p-4">
+          <h3 className="text-foreground flex items-center gap-2 text-xs font-bold tracking-wider uppercase">
+            <Info className="text-primary-text h-4 w-4" />
             Media Details
           </h3>
           <button
             onClick={() => setSelectedVideoId(null)}
-            className="cursor-pointer rounded-lg p-1 text-muted transition hover:bg-surface-hover hover:text-foreground"
+            className="text-muted hover:bg-surface-hover hover:text-foreground cursor-pointer rounded-lg p-1 transition"
           >
             <X className="h-4 w-4" />
           </button>
@@ -46,7 +46,7 @@ export const MediaDetailsPanel: React.FC<MediaDetailsPanelProps> = ({
         {/* Scrollable details content */}
         <div className="flex-1 space-y-3 overflow-y-auto p-2">
           {/* Visual Preview Frame */}
-          <div className="group/sidebar relative aspect-video overflow-hidden rounded-xl border border-border bg-background shadow-inner">
+          <div className="group/sidebar border-border bg-background relative aspect-video overflow-hidden rounded-xl border shadow-inner">
             <img
               src={`adaumc://${selectedVideo.id}/thumbnail`}
               alt={selectedVideo.title}
@@ -56,28 +56,28 @@ export const MediaDetailsPanel: React.FC<MediaDetailsPanelProps> = ({
               onClick={() => setPlayingVideo(selectedVideo)}
               className="absolute inset-0 flex cursor-pointer items-center justify-center bg-slate-950/45 opacity-0 transition duration-300 group-hover/sidebar:opacity-100"
             >
-              <div className="flex h-12 w-12 scale-90 transform items-center justify-center rounded-full bg-primary text-white shadow-lg transition duration-300 group-hover/sidebar:scale-100">
+              <div className="bg-primary flex h-12 w-12 scale-90 transform items-center justify-center rounded-full text-white shadow-lg transition duration-300 group-hover/sidebar:scale-100">
                 <Play className="ml-1 h-5 w-5 fill-current" />
               </div>
             </button>
-            <div className="absolute bottom-2 left-2 rounded bg-primary px-1.5 py-0.5 text-[9px] font-bold text-white">
+            <div className="bg-primary absolute bottom-2 left-2 rounded px-1.5 py-0.5 text-[9px] font-bold text-white">
               {selectedVideo.resolution}
             </div>
           </div>
 
           {/* Title & Info */}
           <div>
-            <h4 className="line-clamp-2 text-sm font-bold text-foreground">
+            <h4 className="text-foreground line-clamp-2 text-sm font-bold">
               {selectedVideo.title}
             </h4>
-            <span className="mt-1 block select-all font-mono text-[10px] text-muted">
+            <span className="text-muted mt-1 block font-mono text-[10px] select-all">
               ID: {selectedVideo.id}
             </span>
           </div>
 
           {/* Tag Editor Section */}
-          <div className="flex flex-col gap-1.5 rounded-xl border border-border bg-background/50 p-3">
-            <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted">
+          <div className="border-border bg-background/50 flex flex-col gap-1.5 rounded-xl border p-3">
+            <span className="text-muted flex items-center gap-1.5 text-[11px] font-bold tracking-wider uppercase">
               Video Tags
             </span>
             <TagDropdown
@@ -89,12 +89,12 @@ export const MediaDetailsPanel: React.FC<MediaDetailsPanelProps> = ({
           </div>
 
           {/* Metadata Grid */}
-          <div className="bg-background/50 grid grid-cols-2 gap-3 rounded-xl border border-border p-3 text-xs">
+          <div className="bg-background/50 border-border grid grid-cols-2 gap-3 rounded-xl border p-3 text-xs">
             <div>
-              <span className="block text-[10px] font-medium uppercase text-muted">
+              <span className="text-muted block text-[10px] font-medium uppercase">
                 Duration
               </span>
-              <span className="font-semibold text-foreground">
+              <span className="text-foreground font-semibold">
                 {Math.floor(selectedVideo.duration / 60)}:
                 {Math.floor(selectedVideo.duration % 60)
                   .toString()
@@ -102,47 +102,55 @@ export const MediaDetailsPanel: React.FC<MediaDetailsPanelProps> = ({
               </span>
             </div>
             <div>
-              <span className="block text-[10px] font-medium uppercase text-muted">
+              <span className="text-muted block text-[10px] font-medium uppercase">
                 Resolution
               </span>
-              <span className="font-semibold text-foreground">
+              <span className="text-foreground font-semibold">
                 {selectedVideo.resolution}
               </span>
             </div>
             <div>
-              <span className="block text-[10px] font-medium uppercase text-muted">
+              <span className="text-muted block text-[10px] font-medium uppercase">
                 Play Count
               </span>
-              <span className="font-semibold text-foreground">
+              <span className="text-foreground font-semibold">
                 {selectedVideo.playCount || 0} views
               </span>
             </div>
             <div>
-              <span className="block text-[10px] font-medium uppercase text-muted">
+              <span className="text-muted block text-[10px] font-medium uppercase">
                 Added Date
               </span>
-              <span className="font-semibold text-foreground">
+              <span className="text-foreground font-semibold">
                 {new Date(selectedVideo.createdAt).toLocaleDateString()}
               </span>
             </div>
           </div>
 
           {/* Actions */}
-          <div className="space-y-2 border-t border-border pt-4">
+          <div className="border-border space-y-2 border-t pt-4">
             <button
               onClick={() => setPlayingVideo(selectedVideo)}
-              className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-primary py-2 text-xs font-bold text-white shadow transition hover:bg-primary-hover"
+              title="Play Video Stream (Enter)"
+              className="bg-primary hover:bg-primary-hover flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg p-2 text-xs font-bold text-white shadow transition"
             >
               <Play className="h-3.5 w-3.5 fill-current" />
-              Play Video Stream
+              <span>Play Video Stream</span>
+              <kbd className="ml-auto rounded bg-white/20 px-1.5 py-0.5 font-mono text-[9px] font-bold text-white">
+                Enter
+              </kbd>
             </button>
 
             <button
               onClick={() => onInspectBundle(selectedVideo)}
-              className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-border bg-surface py-2 text-xs font-semibold text-foreground transition hover:bg-surface-hover"
+              title="Inspect Bundle Debugger (B)"
+              className="border-border bg-surface text-foreground hover:bg-surface-hover flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border p-2 text-xs font-semibold transition"
             >
-              <FileText className="h-3.5 w-3.5 text-muted" />
-              Inspect Bundle Debugger
+              <FileText className="text-muted h-3.5 w-3.5" />
+              <span>Inspect Bundle Debugger</span>
+              <kbd className="border-border bg-background text-muted ml-auto rounded border px-1.5 py-0.5 font-mono text-[9px] font-bold">
+                B
+              </kbd>
             </button>
 
             <button
@@ -155,10 +163,14 @@ export const MediaDetailsPanel: React.FC<MediaDetailsPanelProps> = ({
                   deleteVideo(selectedVideo.id);
                 }
               }}
-              className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-rose-500/30 py-2 text-xs font-semibold text-rose-500 transition hover:bg-rose-500/10"
+              title="Delete Video Bundle (Delete)"
+              className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-rose-500/30 p-2 text-xs font-semibold text-rose-500 transition hover:bg-rose-500/10"
             >
               <Trash2 className="h-3.5 w-3.5" />
-              Delete Video Bundle
+              <span>Delete Video Bundle</span>
+              <kbd className="border-border bg-background text-muted ml-auto rounded border px-1.5 py-0.5 font-mono text-[9px] font-bold">
+                Del
+              </kbd>
             </button>
           </div>
         </div>

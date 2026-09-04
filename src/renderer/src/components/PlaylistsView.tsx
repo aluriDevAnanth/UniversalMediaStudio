@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { ListVideo, Plus, Clock, Star, Trash2, Film } from "lucide-react";
 import { useVideoStore } from "../store/videoStore";
 import { VideoCard } from "./VideoCard";
@@ -14,6 +14,29 @@ export const PlaylistsView: React.FC = () => {
   } = useVideoStore();
   const [newPlaylistName, setNewPlaylistName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isInput =
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable);
+
+      if (isInput) return;
+
+      const isCtrl = e.ctrlKey || e.metaKey;
+      if ((!isCtrl && e.key.toLowerCase() === "n") || (isCtrl && e.key.toLowerCase() === "n")) {
+        e.preventDefault();
+        setIsCreating(true);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const activePlaylist =
     playlists.find((p) => p.id === (selectedPlaylistId || "watch_later")) ||
