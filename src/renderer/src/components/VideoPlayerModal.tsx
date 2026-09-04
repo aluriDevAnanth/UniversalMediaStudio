@@ -6,6 +6,7 @@ import {
   Plus,
   Trash2,
   MessageSquare,
+  Keyboard,
 } from "lucide-react";
 import {
   MediaPlayer,
@@ -110,7 +111,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
 }) => {
   const [showLogs, setShowLogs] = useState(false);
   const [isPlayerDragHovered, setIsPlayerDragHovered] = useState(false);
-  const { videos, updateVideoTags } = useVideoStore();
+  const { videos, updateVideoTags, setShortcutsOpen } = useVideoStore();
   const playerRef = useRef<MediaPlayerInstance>(null);
 
   const currentVideo = videos.find((v) => v.id === video.id) || video;
@@ -216,6 +217,187 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
       }
     }
   };
+
+  // Keyboard Shortcuts for Video Player
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isInput =
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable);
+
+      if (isInput) return;
+
+      const player = playerRef.current;
+      if (!player) return;
+
+      const key = e.key.toLowerCase();
+      const isCtrl = e.ctrlKey || e.metaKey;
+
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        if (showLogs) {
+          setShowLogs(false);
+          return;
+        }
+        if (document.fullscreenElement) {
+          if (document.exitFullscreen) {
+            document.exitFullscreen();
+          }
+          return;
+        }
+        onClose();
+        return;
+      }
+
+      if (e.key === " " || key === "k") {
+        e.preventDefault();
+        if (player.paused) {
+          player.play();
+        } else {
+          player.pause();
+        }
+        return;
+      }
+
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        player.currentTime = Math.max(0, player.currentTime - 5);
+        return;
+      }
+
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        player.currentTime = Math.min(player.duration || 999999, player.currentTime + 5);
+        return;
+      }
+
+      if (key === "j") {
+        e.preventDefault();
+        player.currentTime = Math.max(0, player.currentTime - 10);
+        return;
+      }
+
+      if (key === "l" && !isCtrl) {
+        e.preventDefault();
+        player.currentTime = Math.min(player.duration || 999999, player.currentTime + 10);
+        return;
+      }
+
+      if (e.key === "," || e.key === "<") {
+        e.preventDefault();
+        if (e.shiftKey || e.key === "<") {
+          player.playbackRate = Math.max(0.25, Number((player.playbackRate - 0.25).toFixed(2)));
+          showToast("Playback Speed", `${player.playbackRate}x`, "info");
+        } else if (player.paused) {
+          player.currentTime = Math.max(0, player.currentTime - 1 / 30);
+        }
+        return;
+      }
+
+      if (e.key === "." || e.key === ">") {
+        e.preventDefault();
+        if (e.shiftKey || e.key === ">") {
+          player.playbackRate = Math.min(2.0, Number((player.playbackRate + 0.25).toFixed(2)));
+          showToast("Playback Speed", `${player.playbackRate}x`, "info");
+        } else if (player.paused) {
+          player.currentTime = Math.min(player.duration || 999999, player.currentTime + 1 / 30);
+        }
+        return;
+      }
+
+      if (e.key === "[") {
+        e.preventDefault();
+        player.playbackRate = Math.max(0.25, Number((player.playbackRate - 0.25).toFixed(2)));
+        showToast("Playback Speed", `${player.playbackRate}x`, "info");
+        return;
+      }
+
+      if (e.key === "]") {
+        e.preventDefault();
+        player.playbackRate = Math.min(2.0, Number((player.playbackRate + 0.25).toFixed(2)));
+        showToast("Playback Speed", `${player.playbackRate}x`, "info");
+        return;
+      }
+
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        player.volume = Math.min(1, Number((player.volume + 0.05).toFixed(2)));
+        player.muted = false;
+        return;
+      }
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        player.volume = Math.max(0, Number((player.volume - 0.05).toFixed(2)));
+        return;
+      }
+
+      if (key === "m") {
+        e.preventDefault();
+        player.muted = !player.muted;
+        return;
+      }
+
+      if (key === "f") {
+        e.preventDefault();
+        if (document.fullscreenElement) {
+          if (document.exitFullscreen) {
+            document.exitFullscreen();
+          }
+        } else {
+          if (player.enterFullscreen) {
+            player.enterFullscreen();
+          }
+        }
+        return;
+      }
+
+      if (key === "c") {
+        e.preventDefault();
+        const textTracks = player.textTracks;
+        if (textTracks && textTracks.length > 0) {
+          const active = Array.from(textTracks).find((t: any) => t.mode === "showing");
+          if (active) {
+            (active as any).mode = "disabled";
+            showToast("Subtitles", "Disabled", "info");
+          } else {
+            const first = textTracks[0];
+            if (first) {
+              (first as any).mode = "showing";
+              showToast("Subtitles", first.label || "Enabled", "info");
+            }
+          }
+        }
+        return;
+      }
+
+      if (e.key === "0" || e.key === "Home") {
+        e.preventDefault();
+        player.currentTime = 0;
+        return;
+      }
+
+      if (e.key === "End") {
+        e.preventDefault();
+        player.currentTime = player.duration || 0;
+        return;
+      }
+
+      if (e.key === "`" || e.key === "~") {
+        e.preventDefault();
+        setShowLogs((prev) => !prev);
+        return;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
+  }, [showLogs, onClose]);
 
   useEffect(() => {
     if (showLogs && currentVideo.bundlePath) {
@@ -340,7 +522,16 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
 
           <div className="flex items-center gap-2">
             <button
+              onClick={() => setShortcutsOpen(true)}
+              title="Player Shortcuts (? or F1)"
+              className="bg-surface hover:bg-surface-hover text-muted hover:text-foreground border-border cursor-pointer rounded-xl border p-1.5 transition"
+            >
+              <Keyboard className="h-4 w-4" />
+            </button>
+
+            <button
               onClick={() => setShowLogs(!showLogs)}
+              title="Container Telemetry Logs (~ or `)"
               className={`flex cursor-pointer items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${
                 showLogs
                   ? "bg-primary border-primary-border text-white"
@@ -353,6 +544,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
 
             <button
               onClick={onClose}
+              title="Close Player (Esc)"
               className="hover:bg-surface-hover text-muted hover:text-foreground cursor-pointer rounded-xl p-2 transition"
             >
               <X className="h-5 w-5" />

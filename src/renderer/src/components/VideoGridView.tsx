@@ -132,6 +132,14 @@ export const VideoGridView: React.FC = () => {
     importVideoFile,
     activeImports,
     cancelImport,
+    selectedVideoId,
+    setSelectedVideoId,
+    selectedVideoIds,
+    toggleVideoSelection,
+    selectAllVideos,
+    setPlayingVideo,
+    deleteVideo,
+    bulkDeleteSelectedVideos,
   } = useVideoStore();
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -190,6 +198,166 @@ export const VideoGridView: React.FC = () => {
 
   const { visibleRange, paddingTop, paddingBottom, columnCount } =
     useVirtualGrid(scrollRef, filteredVideos.length);
+
+  // Keyboard navigation & actions for video grid
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isInput =
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable);
+
+      if (isInput) return;
+      if (filteredVideos.length === 0) return;
+
+      const isCtrl = e.ctrlKey || e.metaKey;
+
+      // Select All: Ctrl+A
+      if (isCtrl && e.key.toLowerCase() === "a") {
+        e.preventDefault();
+        selectAllVideos(filteredVideos.map((v) => v.id));
+        return;
+      }
+
+      // Enter: Play selected video
+      if (e.key === "Enter") {
+        if (selectedVideoId) {
+          const vid = filteredVideos.find((v) => v.id === selectedVideoId);
+          if (vid) {
+            e.preventDefault();
+            setPlayingVideo(vid);
+            return;
+          }
+        }
+      }
+
+      // Space: Toggle multi-select on focused video
+      if (e.key === " ") {
+        if (selectedVideoId) {
+          e.preventDefault();
+          toggleVideoSelection(selectedVideoId);
+          return;
+        }
+      }
+
+      // Delete: Delete selected video or bulk delete
+      if (e.key === "Delete" || e.key === "Backspace") {
+        if (selectedVideoIds.length > 0) {
+          e.preventDefault();
+          if (
+            confirm(
+              `Are you sure you want to delete ${selectedVideoIds.length} selected videos?`,
+            )
+          ) {
+            bulkDeleteSelectedVideos();
+          }
+          return;
+        } else if (selectedVideoId) {
+          const vid = filteredVideos.find((v) => v.id === selectedVideoId);
+          if (vid) {
+            e.preventDefault();
+            if (confirm(`Are you sure you want to delete "${vid.title}"?`)) {
+              deleteVideo(vid.id);
+            }
+            return;
+          }
+        }
+      }
+
+      // 'I': Toggle details panel
+      if (!isCtrl && e.key.toLowerCase() === "i") {
+        if (selectedVideoId) {
+          e.preventDefault();
+          setSelectedVideoId(null);
+        } else if (filteredVideos.length > 0) {
+          e.preventDefault();
+          setSelectedVideoId(filteredVideos[0].id);
+        }
+        return;
+      }
+
+      // 'B': Open bundle inspector
+      if (!isCtrl && e.key.toLowerCase() === "b") {
+        if (selectedVideoId) {
+          const vid = filteredVideos.find((v) => v.id === selectedVideoId);
+          if (vid) {
+            e.preventDefault();
+            window.dispatchEvent(
+              new CustomEvent("inspect-video-bundle", { detail: vid }),
+            );
+          }
+        }
+        return;
+      }
+
+      // Arrow navigation
+      if (
+        e.key === "ArrowRight" ||
+        e.key === "ArrowLeft" ||
+        e.key === "ArrowUp" ||
+        e.key === "ArrowDown"
+      ) {
+        e.preventDefault();
+        const currentIndex = filteredVideos.findIndex(
+          (v) => v.id === selectedVideoId,
+        );
+
+        let nextIndex = 0;
+        if (currentIndex === -1) {
+          nextIndex = 0;
+        } else if (e.key === "ArrowRight") {
+          nextIndex = Math.min(filteredVideos.length - 1, currentIndex + 1);
+        } else if (e.key === "ArrowLeft") {
+          nextIndex = Math.max(0, currentIndex - 1);
+        } else if (e.key === "ArrowDown") {
+          nextIndex = Math.min(
+            filteredVideos.length - 1,
+            currentIndex + columnCount,
+          );
+        } else if (e.key === "ArrowUp") {
+          nextIndex = Math.max(0, currentIndex - columnCount);
+        }
+
+        const nextVideo = filteredVideos[nextIndex];
+        if (nextVideo) {
+          setSelectedVideoId(nextVideo.id);
+
+          // Auto-scroll into view if needed
+          const rowHeight = CARD_HEIGHT + GAP;
+          const targetRow = Math.floor(nextIndex / columnCount);
+          const targetTop = targetRow * rowHeight;
+          const targetBottom = targetTop + rowHeight;
+
+          if (scrollRef.current) {
+            const el = scrollRef.current;
+            if (targetTop < el.scrollTop) {
+              el.scrollTop = targetTop;
+            } else if (targetBottom > el.scrollTop + el.clientHeight) {
+              el.scrollTop = targetBottom - el.clientHeight;
+            }
+          }
+        }
+        return;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [
+    filteredVideos,
+    selectedVideoId,
+    selectedVideoIds,
+    columnCount,
+    setSelectedVideoId,
+    toggleVideoSelection,
+    selectAllVideos,
+    setPlayingVideo,
+    deleteVideo,
+    bulkDeleteSelectedVideos,
+  ]);
 
   const visibleVideos = filteredVideos.slice(
     visibleRange.start,

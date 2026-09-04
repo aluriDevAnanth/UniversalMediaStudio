@@ -21,8 +21,11 @@ interface VideoStoreState {
   theme: "dark" | "light";
   selectedVideoId: string | null;
   selectedVideoIds: string[];
+  isShortcutsOpen: boolean;
 
   // Actions
+  setShortcutsOpen: (open: boolean) => void;
+  toggleShortcutsOpen: () => void;
   updateActiveImport: (progress: any) => void;
   removeActiveImport: (taskId: string) => void;
   cancelImport: (taskId?: string) => Promise<void>;
@@ -51,6 +54,7 @@ interface VideoStoreState {
   bulkDeleteSelectedVideos: () => Promise<void>;
   setSearchQuery: (query: string) => void;
   toggleSelectedTag: (tag: string) => void;
+  setSelectedTags: (tags: string[]) => void;
   clearSelectedTags: () => void;
   setSelectedPlaylistId: (id: string | null) => void;
   setSelectedVideoId: (id: string | null) => void;
@@ -79,6 +83,10 @@ export const useVideoStore = create<VideoStoreState>((set, get) => ({
   theme: "dark",
   selectedVideoId: null,
   selectedVideoIds: [],
+  isShortcutsOpen: false,
+
+  setShortcutsOpen: (open: boolean) => set({ isShortcutsOpen: open }),
+  toggleShortcutsOpen: () => set((state) => ({ isShortcutsOpen: !state.isShortcutsOpen })),
 
   checkAuthStatus: async () => {
     try {
@@ -286,6 +294,7 @@ export const useVideoStore = create<VideoStoreState>((set, get) => ({
       : [...current, tag];
     set({ selectedTags: next });
   },
+  setSelectedTags: (tags: string[]) => set({ selectedTags: tags }),
   clearSelectedTags: () => set({ selectedTags: [] }),
   setSelectedPlaylistId: (selectedPlaylistId: string | null) =>
     set({ selectedPlaylistId }),

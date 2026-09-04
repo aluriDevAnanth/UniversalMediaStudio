@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { VideoRecord } from "../env";
 import { useVideoStore } from "../store/videoStore";
+import { TagBadge } from "./TagBadge";
 
 interface VideoContextMenuProps {
   video: VideoRecord;
@@ -377,22 +378,24 @@ export const VideoContextMenu: React.FC<VideoContextMenuProps> = ({
                     : [...video.tags, t];
                   updateVideoTags(video.id, next);
                 }}
-                className={`flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-xs transition ${
+                className={`flex w-full cursor-pointer items-center justify-between px-3 py-1.5 text-xs transition ${
                   isOn
-                    ? "bg-primary/5 hover:bg-primary/10 text-primary-text"
+                    ? "bg-primary/10 text-primary-text font-semibold"
                     : "text-foreground hover:bg-surface-hover"
                 }`}
               >
-                <span
-                  className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded transition ${
-                    isOn
-                      ? "bg-primary text-white"
-                      : "border border-border bg-background"
-                  }`}
-                >
-                  {isOn && <Check className="h-2.5 w-2.5" />}
-                </span>
-                <span className="flex-1 truncate font-medium">#{t}</span>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded transition ${
+                      isOn
+                        ? "bg-primary text-white"
+                        : "border border-border bg-background"
+                    }`}
+                  >
+                    {isOn && <Check className="h-2.5 w-2.5" />}
+                  </span>
+                  <TagBadge rawTag={t} size="xs" showDot selected={isOn} />
+                </div>
               </button>
             );
           })
