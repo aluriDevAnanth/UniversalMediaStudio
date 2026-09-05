@@ -209,20 +209,33 @@ export async function importVideoFile(
     const tempThumbPath = path.join(tempDir, "thumbnail.jpg");
     const tempGifPath = path.join(tempDir, "thumbnail.gif");
     const tempVttPath = path.join(tempDir, "preview.vtt");
+    const tempStreamableMp4 = path.join(tempDir, "streamable.mp4");
 
     bundlePath = path.join(bundlesDir, `${videoId}.adaumc`);
 
-    // Initialize Concurrent Video Packer to stream video in the background
-    packer = new ConcurrentPacker(bundlePath);
-    packer.startPackingVideo(selectedPath);
-
-    // Step 0: Probe metadata
-    broadcastProgress(1, 5, `Probing video resolution & real duration...`);
+    // Step 0: Probe metadata & prepare streamable faststart video
+    broadcastProgress(1, 5, `Probing video resolution & preparing streamable MP4...`);
 
     const videoMeta = await FFmpegProcessor.getVideoMetadata(selectedPath);
     if (videoMeta.logs && Array.isArray(videoMeta.logs)) {
       logs.push(...videoMeta.logs);
     }
+
+    const normRes = await FFmpegProcessor.prepareStreamableVideo(
+      videoId,
+      selectedPath,
+      tempStreamableMp4,
+      () => !!activeImportTasks.get(videoId)?.isCancelled,
+    );
+    if (normRes.logs && Array.isArray(normRes.logs)) {
+      logs.push(...normRes.logs);
+    }
+    const finalVideoToPack = normRes.streamablePath;
+
+    // Initialize Concurrent Video Packer to stream video in the background
+    packer = new ConcurrentPacker(bundlePath);
+    packer.startPackingVideo(finalVideoToPack);
+
     logs.push(
       makeLog({
         event: "info",
@@ -233,6 +246,7 @@ export async function importVideoFile(
           durationSec: videoMeta.duration,
           resolution: videoMeta.resolution,
           codec: videoMeta.codec,
+          isTranscoded: normRes.isTranscoded,
         },
       }),
     );

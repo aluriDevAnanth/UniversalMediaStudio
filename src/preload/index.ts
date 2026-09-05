@@ -95,6 +95,8 @@ const api = {
       ),
     removeSubtitle: (bundlePath: string, assetKey: string) =>
       ipcRenderer.invoke("bundle:removeSubtitle", bundlePath, assetKey),
+    optimize: (bundlePath: string) =>
+      ipcRenderer.invoke("bundle:optimize", bundlePath),
   },
   windowControls: {
     minimize: () => ipcRenderer.send("window:minimize"),

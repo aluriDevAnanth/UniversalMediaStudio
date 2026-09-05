@@ -1,13 +1,81 @@
-import { protocol } from "electron";
 import { BundleManager } from "./bundle_manager";
 import { db } from "./db";
 
+let electronProtocol: any = null;
+try {
+  const electron = require("electron");
+  electronProtocol = electron?.protocol || electron?.default?.protocol || null;
+} catch {}
+
+export interface ParsedRange {
+  start: number;
+  end: number;
+  contentLength: number;
+  isSatisfiable: boolean;
+}
+
+/**
+ * Parses HTTP Range headers according to RFC 7233 standards
+ */
+export function parseRangeHeader(
+  rangeHeader: string | null | undefined,
+  totalSize: number,
+): ParsedRange | null {
+  if (!rangeHeader || !rangeHeader.startsWith("bytes=")) {
+    return null;
+  }
+
+  const rangePart = rangeHeader.replace(/^bytes=/, "").trim();
+  // Handle first range in comma-separated list
+  const firstRange = rangePart.split(",")[0].trim();
+  const [startStr, endStr] = firstRange.split("-");
+
+  if (!startStr && !endStr) {
+    return null;
+  }
+
+  let start: number;
+  let end: number;
+
+  if (!startStr && endStr) {
+    // Suffix byte range: e.g. "bytes=-500" (last 500 bytes)
+    const suffixLength = parseInt(endStr, 10);
+    if (isNaN(suffixLength) || suffixLength <= 0) return null;
+    start = Math.max(0, totalSize - suffixLength);
+    end = totalSize - 1;
+  } else if (startStr && !endStr) {
+    // Open-ended range: e.g. "bytes=500-"
+    start = parseInt(startStr, 10);
+    if (isNaN(start) || start < 0) return null;
+    end = totalSize - 1;
+  } else {
+    // Explicit range: e.g. "bytes=0-499"
+    start = parseInt(startStr, 10);
+    end = parseInt(endStr, 10);
+    if (isNaN(start) || isNaN(end) || start < 0 || end < start) return null;
+    end = Math.min(totalSize - 1, end);
+  }
+
+  const isSatisfiable = start < totalSize && start <= end;
+  const contentLength = isSatisfiable ? end - start + 1 : 0;
+
+  return {
+    start,
+    end,
+    contentLength,
+    isSatisfiable,
+  };
+}
+
 export function registerAdaumcProtocol(): void {
-  protocol.handle("adaumc", async (request) => {
+  if (!electronProtocol || typeof electronProtocol.handle !== "function") {
+    return;
+  }
+
+  electronProtocol.handle("adaumc", async (request: any) => {
     try {
       const url = new URL(request.url);
       // Format: adaumc://[videoId]/[assetKey]
-      // e.g. adaumc://vid_123/video or adaumc://vid_123/gif
       const videoId = url.hostname;
       let assetKey = url.pathname.replace(/^\//, "") || "video";
 
@@ -16,23 +84,40 @@ export function registerAdaumcProtocol(): void {
         return new Response("Video bundle not found", { status: 404 });
       }
 
-      const rangeHeader = request.headers.get("Range");
-      let startByte: number | undefined;
-      let endByte: number | undefined;
+      const rangeHeader =
+        request.headers.get("Range") || request.headers.get("range");
 
-      if (rangeHeader) {
-        const parts = rangeHeader.replace(/bytes=/, "").split("-");
-        if (parts[0]) startByte = parseInt(parts[0], 10);
-        if (parts[1] && parts[1] !== "") endByte = parseInt(parts[1], 10);
-      }
-
-      // For video streaming, use ReadableStream (matching YTDLPY get_asset_stream)
+      // For video streaming:
       if (assetKey === "video") {
+        const { metadata } = BundleManager.readMetadata(videoRecord.bundlePath);
+        const asset = metadata.assets[assetKey];
+        if (!asset) {
+          return new Response("Video asset not found in bundle", { status: 404 });
+        }
+
+        const totalSize = asset.length || asset.size || 0;
+        const parsedRange = parseRangeHeader(rangeHeader, totalSize);
+
+        if (rangeHeader && parsedRange && !parsedRange.isSatisfiable) {
+          return new Response(null, {
+            status: 416,
+            headers: {
+              "Content-Range": `bytes */${totalSize}`,
+              "Accept-Ranges": "bytes",
+            },
+          });
+        }
+
+        const startByte = parsedRange ? parsedRange.start : 0;
+        const endByte = parsedRange ? parsedRange.end : totalSize - 1;
+
         const streamResult = BundleManager.createAssetStream(
           videoRecord.bundlePath,
           assetKey,
           startByte,
           endByte,
+          undefined, // Stream full range on demand with backpressure
+          request.signal,
         );
 
         const contentLength = (
@@ -41,7 +126,7 @@ export function registerAdaumcProtocol(): void {
           1
         ).toString();
 
-        if (rangeHeader) {
+        if (rangeHeader && parsedRange) {
           return new Response(streamResult.stream as any, {
             status: 206,
             headers: {
@@ -49,6 +134,7 @@ export function registerAdaumcProtocol(): void {
               "Content-Range": `bytes ${streamResult.start}-${streamResult.end}/${streamResult.totalSize}`,
               "Accept-Ranges": "bytes",
               "Content-Length": contentLength,
+              "Cache-Control": "no-cache",
             },
           });
         } else {
@@ -58,6 +144,7 @@ export function registerAdaumcProtocol(): void {
               "Content-Type": streamResult.mimeType || "video/mp4",
               "Content-Length": streamResult.totalSize.toString(),
               "Accept-Ranges": "bytes",
+              "Cache-Control": "no-cache",
             },
           });
         }
@@ -67,20 +154,34 @@ export function registerAdaumcProtocol(): void {
       const slice = BundleManager.readAssetSlice(
         videoRecord.bundlePath,
         assetKey,
-        startByte,
-        endByte,
       );
 
       const responseMimeType = slice.mimeType || "application/octet-stream";
+      const parsedRange = parseRangeHeader(rangeHeader, slice.totalSize);
 
-      if (rangeHeader) {
-        return new Response(slice.buffer as any, {
+      if (rangeHeader && parsedRange) {
+        if (!parsedRange.isSatisfiable) {
+          return new Response(null, {
+            status: 416,
+            headers: {
+              "Content-Range": `bytes */${slice.totalSize}`,
+              "Accept-Ranges": "bytes",
+            },
+          });
+        }
+
+        const subBuffer = slice.buffer.subarray(
+          parsedRange.start,
+          parsedRange.end + 1,
+        );
+
+        return new Response(subBuffer as any, {
           status: 206,
           headers: {
             "Content-Type": responseMimeType,
-            "Content-Range": `bytes ${slice.start}-${slice.end}/${slice.totalSize}`,
+            "Content-Range": `bytes ${parsedRange.start}-${parsedRange.end}/${slice.totalSize}`,
             "Accept-Ranges": "bytes",
-            "Content-Length": slice.buffer.length.toString(),
+            "Content-Length": subBuffer.length.toString(),
             "Cache-Control": "public, max-age=86400, immutable",
           },
         });

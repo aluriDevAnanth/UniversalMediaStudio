@@ -122,6 +122,9 @@ export interface IElectronAPI {
       bundlePath: string,
       assetKey: string,
     ) => Promise<{ assetKey: string; metadata: AdaumcMetadata } | { error: string }>;
+    optimize: (
+      bundlePath: string,
+    ) => Promise<{ success: boolean; bundlePath: string; wasOptimized: boolean; message: string; error?: string }>;
   };
   windowControls: {
     minimize: () => void;
