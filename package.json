@@ -28,6 +28,7 @@
     "postinstall": "node node_modules/electron/install.js",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
+    "startup": "bun run scripts/startup.ts",
     "packagecode": "bun run scripts/package-code.ts"
   },
   "dependencies": {

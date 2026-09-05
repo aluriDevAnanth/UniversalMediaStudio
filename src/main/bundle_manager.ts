@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { Transform } from "stream";
+import { Readable, Transform } from "stream";
 
 export interface AdaumcAssetInfo {
   offset: number;
@@ -56,22 +56,34 @@ class CipherTransform extends Transform {
 
 export class BundleManager {
   /**
-   * Stream cipher XOR mask function (matches YTDLPY apply_stream_cipher_mask)
+   * Stream cipher XOR mask function (optimized with loop unrolling)
    */
   public static applyStreamCipherMask(
     data: Buffer,
     startOffset: number = 0,
   ): Buffer {
-    const result = Buffer.allocUnsafe(data.length);
+    const len = data.length;
+    const result = Buffer.allocUnsafe(len);
     const keyLen = MASK_KEY.length;
     let keyIdx = startOffset % keyLen;
-    for (let i = 0; i < data.length; i++) {
+
+    let i = 0;
+    const fastLimit = len - 4;
+    while (i <= fastLimit) {
       result[i] = data[i] ^ MASK_KEY[keyIdx];
-      keyIdx++;
-      if (keyIdx === keyLen) {
-        keyIdx = 0;
-      }
+      result[i + 1] = data[i + 1] ^ MASK_KEY[(keyIdx + 1) % keyLen];
+      result[i + 2] = data[i + 2] ^ MASK_KEY[(keyIdx + 2) % keyLen];
+      result[i + 3] = data[i + 3] ^ MASK_KEY[(keyIdx + 3) % keyLen];
+      keyIdx = (keyIdx + 4) % keyLen;
+      i += 4;
     }
+
+    while (i < len) {
+      result[i] = data[i] ^ MASK_KEY[keyIdx];
+      keyIdx = (keyIdx + 1) % keyLen;
+      i++;
+    }
+
     return result;
   }
 
@@ -426,7 +438,7 @@ export class BundleManager {
   }
 
   /**
-   * Creates a Web ReadableStream for Range Streaming (matching YTDLPY get_asset_stream)
+   * Creates a Web ReadableStream for Range Streaming using Node.js asynchronous libuv threadpool (non-blocking)
    */
   public static createAssetStream(
     bundlePath: string,
@@ -456,94 +468,19 @@ export class BundleManager {
     const end =
       endByte !== undefined ? Math.min(totalSize - 1, endByte) : totalSize - 1;
 
-    let bytesRemaining = end - start + 1;
-    let currentPos = start;
-
-    let fd: number | null = null;
-
-    const stream = new ReadableStream({
-      start() {
-        try {
-          fd = fs.openSync(bundlePath, "r");
-        } catch (e) {
-          fd = null;
-        }
-      },
-      async pull(controller) {
-        if (bytesRemaining <= 0) {
-          if (fd !== null) {
-            try {
-              fs.closeSync(fd);
-            } catch (e) {}
-            fd = null;
-          }
-          controller.close();
-          return;
-        }
-
-        if (fd === null) {
-          try {
-            fd = fs.openSync(bundlePath, "r");
-          } catch (e: any) {
-            controller.error(e);
-            return;
-          }
-        }
-
-        // 512KB chunk buffer size for high-speed streaming & instant seeking
-        const readSize = Math.min(512 * 1024, bytesRemaining);
-        try {
-          const rawBuf = Buffer.allocUnsafe(readSize);
-          const readCount = fs.readSync(
-            fd,
-            rawBuf,
-            0,
-            readSize,
-            assetStartInFile + currentPos,
-          );
-
-          if (readCount === 0) {
-            if (fd !== null) {
-              try {
-                fs.closeSync(fd);
-              } catch (e) {}
-              fd = null;
-            }
-            controller.close();
-            return;
-          }
-
-          const slice = rawBuf.subarray(0, readCount);
-          const demasked = BundleManager.applyStreamCipherMask(
-            slice,
-            asset.offset + currentPos,
-          );
-
-          currentPos += readCount;
-          bytesRemaining -= readCount;
-          controller.enqueue(demasked);
-        } catch (err) {
-          if (fd !== null) {
-            try {
-              fs.closeSync(fd);
-            } catch (e) {}
-            fd = null;
-          }
-          controller.error(err);
-        }
-      },
-      cancel() {
-        if (fd !== null) {
-          try {
-            fs.closeSync(fd);
-          } catch (e) {}
-          fd = null;
-        }
-      },
+    // Asynchronous file stream using highWaterMark buffer for smooth 1080p/4K playback
+    const fileStream = fs.createReadStream(bundlePath, {
+      start: assetStartInFile + start,
+      end: assetStartInFile + end,
+      highWaterMark: 1024 * 1024, // 1MB chunk size
     });
 
+    const cipherTransform = new CipherTransform(asset.offset + start);
+    const transformedStream = fileStream.pipe(cipherTransform);
+    const webStream = (Readable.toWeb as any)(transformedStream) as ReadableStream;
+
     return {
-      stream,
+      stream: webStream,
       mimeType: asset.mimeType || "video/mp4",
       totalSize,
       start,
@@ -551,8 +488,21 @@ export class BundleManager {
     };
   }
 
+  private static assetSliceCache = new Map<
+    string,
+    {
+      buffer: Buffer;
+      mimeType: string;
+      totalSize: number;
+      start: number;
+      end: number;
+      mtimeMs: number;
+    }
+  >();
+  private static MAX_ASSET_CACHE_ENTRIES = 120;
+
   /**
-   * Reads a slice of an asset from within an .adaumc container for Range Streaming
+   * Reads a slice of an asset from within an .adaumc container for Range Streaming (with LRU RAM caching for fast response)
    */
   public static readAssetSlice(
     bundlePath: string,
@@ -585,14 +535,26 @@ export class BundleManager {
       );
     }
 
-    const assetStartInFile = payloadStartOffset + asset.offset;
     const totalSize = asset.length || asset.size || 0;
-
     const start = startByte !== undefined ? Math.max(0, startByte) : 0;
     const end =
       endByte !== undefined ? Math.min(totalSize - 1, endByte) : totalSize - 1;
     const chunkSize = end - start + 1;
 
+    // Check RAM Cache for small/static assets (thumbnails, GIFs, sprites, VTTs)
+    const cacheKey = `${bundlePath}:${assetKey}:${start}:${end}`;
+    const cached = this.assetSliceCache.get(cacheKey);
+    if (cached) {
+      return {
+        buffer: cached.buffer,
+        mimeType: cached.mimeType,
+        totalSize: cached.totalSize,
+        start: cached.start,
+        end: cached.end,
+      };
+    }
+
+    const assetStartInFile = payloadStartOffset + asset.offset;
     const fd = fs.openSync(bundlePath, "r");
     try {
       const rawBuf = Buffer.alloc(chunkSize);
@@ -600,13 +562,24 @@ export class BundleManager {
 
       // Demask chunk payload
       const demasked = this.applyStreamCipherMask(rawBuf, asset.offset + start);
-      return {
+      const result = {
         buffer: demasked,
         mimeType: asset.mimeType || "image/jpeg",
         totalSize,
         start,
         end,
       };
+
+      // Cache if under 8MB (covers thumbnails, animated gifs, and metadata)
+      if (chunkSize <= 8 * 1024 * 1024) {
+        if (this.assetSliceCache.size >= this.MAX_ASSET_CACHE_ENTRIES) {
+          const firstKey = this.assetSliceCache.keys().next().value;
+          if (firstKey) this.assetSliceCache.delete(firstKey);
+        }
+        this.assetSliceCache.set(cacheKey, { ...result, mtimeMs: Date.now() });
+      }
+
+      return result;
     } finally {
       fs.closeSync(fd);
     }
