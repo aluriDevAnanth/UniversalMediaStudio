@@ -29,6 +29,7 @@ protocol.registerSchemesAsPrivileged([
       corsEnabled: true,
       stream: true,
       codeCache: true,
+      bypassCSP: true,
     },
   },
 ]);
@@ -330,6 +331,24 @@ app.whenReady().then(() => {
       }
     },
   );
+
+  ipcMain.handle("bundle:optimize", async (_, bundlePath: string) => {
+    try {
+      const { BundleRepairManager } = require("./bundle_repair");
+      let fullBundlePath = bundlePath || "";
+      if (!fullBundlePath || !fs.existsSync(fullBundlePath)) {
+        const bundlesDir = path.join(app.getPath("userData"), "bundles");
+        fullBundlePath = path.join(
+          bundlesDir,
+          path.basename(bundlePath || ""),
+        );
+      }
+      return await BundleRepairManager.optimizeExistingBundle(fullBundlePath);
+    } catch (e: any) {
+      console.error("[IPC bundle:optimize ERROR]", e);
+      return { success: false, error: e.message };
+    }
+  });
 
   createWindow();
 

@@ -1,7 +1,13 @@
 import fs from "fs";
 import path from "path";
-import { app } from "electron";
+import os from "os";
 import bcrypt from "bcryptjs";
+
+let electronApp: any = null;
+try {
+  const electron = require("electron");
+  electronApp = electron?.app || electron?.default?.app || null;
+} catch {}
 
 export interface VideoRecord {
   id: string;
@@ -45,13 +51,28 @@ interface DBData {
   analytics: AnalyticsRecord;
 }
 
-class Database {
+export class Database {
   private dbPath: string;
   private data: DBData;
 
-  constructor() {
-    const userDataPath = app.getPath("userData");
-    this.dbPath = path.join(userDataPath, "mediahub_store.json");
+  constructor(customDbPath?: string) {
+    if (customDbPath) {
+      this.dbPath = customDbPath;
+    } else {
+      let userDataPath = path.join(os.tmpdir(), "UniversalMediaStudio");
+      try {
+        if (electronApp && typeof electronApp.getPath === "function") {
+          userDataPath = electronApp.getPath("userData");
+        }
+      } catch {}
+      this.dbPath = path.join(userDataPath, "mediahub_store.json");
+    }
+    const dir = path.dirname(this.dbPath);
+    if (!fs.existsSync(dir)) {
+      try {
+        fs.mkdirSync(dir, { recursive: true });
+      } catch {}
+    }
     this.data = this.load();
     this.initDefaults();
     this.cleanGenericTags();

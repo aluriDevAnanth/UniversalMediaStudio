@@ -334,6 +334,97 @@ export class FFmpegProcessor {
   }
 
   /**
+   * Fast-remuxes or transcodes input video to ensure it is 100% compliant with HTML5 <video> / Chromium
+   * (moves moov atom to start of file with -movflags +faststart and ensures H.264/AAC codec compatibility).
+   */
+  public static async prepareStreamableVideo(
+    videoId: string | undefined,
+    inputVideo: string,
+    outputMp4: string,
+    isCancelled?: () => boolean,
+  ): Promise<{ streamablePath: string; isTranscoded: boolean; logs: string[] }> {
+    const logs: string[] = [];
+    const t0 = Date.now();
+    const ffmpegCmd = await FFmpegManager.getFFmpegPath();
+
+    const meta = await this.getVideoMetadata(inputVideo);
+    const videoCodec = (meta.codec || "").toLowerCase();
+    const isH264 = videoCodec.includes("h264") || videoCodec.includes("avc");
+
+    let cmd: string;
+    let isTranscoded = false;
+
+    if (isH264) {
+      cmd = `${ffmpegCmd} -y -nostdin -i "${inputVideo}" -c:v copy -c:a aac -b:a 192k -movflags +faststart "${outputMp4}"`;
+    } else {
+      isTranscoded = true;
+      cmd = `${ffmpegCmd} -y -nostdin -i "${inputVideo}" -c:v libx264 -preset veryfast -crf 22 -c:a aac -b:a 192k -movflags +faststart "${outputMp4}"`;
+    }
+
+    logs.push(
+      makeLog({
+        event: "step_start",
+        step: 0,
+        stepName: "Format Normalize",
+        msg: isTranscoded
+          ? `Transcoding non-H264 video (${videoCodec}) to HTML5-compatible H.264+AAC with +faststart`
+          : `Fast-remuxing video to MP4 with +faststart moov atom optimization`,
+        details: { inputVideo, outputMp4, isH264, isTranscoded, videoCodec },
+      }),
+    );
+
+    await GLOBAL_FFMPEG_SEMAPHORE.acquire();
+    try {
+      if (isCancelled && isCancelled()) {
+        return { streamablePath: inputVideo, isTranscoded: false, logs };
+      }
+
+      await new Promise<void>((resolve) => {
+        const child = exec(cmd, EXEC_OPTIONS, (err) => {
+          if (err) {
+            logs.push(
+              makeLog({
+                level: "warn",
+                event: "warn",
+                step: 0,
+                stepName: "Format Normalize",
+                msg: `FFmpeg normalization fallback: ${err.message}`,
+                details: { errorMsg: err.message },
+              }),
+            );
+            resolve();
+          } else {
+            logs.push(
+              makeLog({
+                event: "step_end",
+                step: 0,
+                stepName: "Format Normalize",
+                durationMs: Date.now() - t0,
+                msg: `Video normalization complete in ${Date.now() - t0}ms`,
+                details: { outputMp4, isTranscoded },
+              }),
+            );
+            resolve();
+          }
+        });
+
+        if (videoId && child) {
+          registerChildProcess(videoId, child);
+        }
+      });
+
+      const exists = fs.existsSync(outputMp4) && fs.statSync(outputMp4).size > 0;
+      return {
+        streamablePath: exists ? outputMp4 : inputVideo,
+        isTranscoded,
+        logs,
+      };
+    } finally {
+      GLOBAL_FFMPEG_SEMAPHORE.release();
+    }
+  }
+
+  /**
    * Extracts static JPEG cover thumbnail frame from video (< 0.2s)
    */
   public static async generateStaticThumbnail(
