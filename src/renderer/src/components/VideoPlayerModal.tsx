@@ -507,12 +507,19 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   const vttThumbnailsUrl = `adaumc://${currentVideo.id}/vtt`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/90 px-2 py-3 backdrop-blur-md">
-      <div className="bg-surface border-border flex h-full w-full max-w-[90vw] flex-col overflow-hidden rounded-2xl border shadow-2xl">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+      className="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/80 px-2 py-3 backdrop-blur-2xl"
+    >
+      <div className="bg-surface/85 border-border/80 relative flex h-full w-full max-w-[90vw] flex-col overflow-hidden rounded-2xl border shadow-2xl backdrop-blur-xl">
         {/* Header */}
-        <div className="border-border bg-background/60 flex items-center justify-between border-b px-2 py-2">
+        <div className="border-border/70 bg-background/60 relative z-30 shrink-0 flex items-center justify-between border-b px-3 py-2 backdrop-blur-md">
           <div className="flex items-center gap-3">
-            <span className="bg-primary/20 text-primary-text border-primary-border/40 rounded border px-2 py-0.5 text-xs font-bold">
+            <span className="bg-primary/20 text-primary-text border-primary-border/40 rounded border px-2 py-0.5 text-xs font-bold backdrop-blur-xs">
               ADAUMC Player
             </span>
             <h2 className="text-foreground max-w-xl truncate text-base font-bold">
@@ -520,19 +527,21 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
             </h2>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="relative z-30 flex items-center gap-2 pointer-events-auto">
             <button
+              type="button"
               onClick={() => setShortcutsOpen(true)}
               title="Player Shortcuts (? or F1)"
-              className="bg-surface hover:bg-surface-hover text-muted hover:text-foreground border-border cursor-pointer rounded-xl border p-1.5 transition"
+              className="bg-surface hover:bg-surface-hover text-muted hover:text-foreground border-border cursor-pointer rounded-xl border p-1.5 transition pointer-events-auto"
             >
               <Keyboard className="h-4 w-4" />
             </button>
 
             <button
+              type="button"
               onClick={() => setShowLogs(!showLogs)}
               title="Container Telemetry Logs (~ or `)"
-              className={`flex cursor-pointer items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${
+              className={`flex cursor-pointer items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition pointer-events-auto ${
                 showLogs
                   ? "bg-primary border-primary-border text-white"
                   : "bg-surface hover:bg-surface-hover text-muted border-border hover:text-foreground"
@@ -543,17 +552,31 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
             </button>
 
             <button
-              onClick={onClose}
+              type="button"
+              onPointerDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onClose();
+              }}
               title="Close Player (Esc)"
-              className="hover:bg-surface-hover text-muted hover:text-foreground cursor-pointer rounded-xl p-2 transition"
+              className="relative z-40 flex h-8 w-8 cursor-pointer items-center justify-center rounded-xl border border-border/80 bg-surface hover:border-red-500/40 hover:bg-red-500/20 text-muted hover:text-red-400 transition active:scale-95 pointer-events-auto select-none"
             >
-              <X className="h-5 w-5" />
+              <X className="pointer-events-none h-4.5 w-4.5" />
             </button>
           </div>
         </div>
 
         {/* Video Player Container */}
         <div
+          style={{ contain: "layout paint", transform: "translateZ(0)" }}
           onDragOver={handlePlayerDragOver}
           onDragLeave={handlePlayerDragLeave}
           onDrop={handlePlayerDrop}

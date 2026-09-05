@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Film, Upload, Loader2, Clock, Trash2, Sparkles } from "lucide-react";
 import { useVideoStore } from "../store/videoStore";
 import { VideoCard } from "./VideoCard";
 import { BulkTaggingToolbar } from "./BulkTaggingToolbar";
 import { VideoRecord } from "../env";
+import { sortVideosByRelevance } from "../utils/relevanceScoring";
 
 // ─── Virtual Grid Hook ────────────────────────────────────────────────────────
 
@@ -126,6 +127,8 @@ function useVirtualGrid(
 export const VideoGridView: React.FC = () => {
   const {
     videos,
+    playlists,
+    sortBy,
     searchQuery,
     selectedTags,
     tagMatchMode,
@@ -145,59 +148,92 @@ export const VideoGridView: React.FC = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Filter videos by search & selected tags (ANY vs ALL mode)
-  const filteredVideos: VideoRecord[] = videos.filter((v) => {
-    let matchesSearch = true;
-    if (searchQuery) {
-      const q = searchQuery.trim();
-      if (q.startsWith("#")) {
-        const clean = q.slice(1);
-        if (clean.includes(":")) {
-          const [catSearch, tagSearch] = clean.split(":");
-          matchesSearch = v.tags.some((t) => {
-            const parts = t.split(":");
-            const cat = parts[0] || "General";
-            const tagNm = parts.slice(1).join(":") || t;
-            return (
-              cat.toLowerCase().includes(catSearch.toLowerCase()) &&
-              tagNm.toLowerCase().includes(tagSearch.toLowerCase())
-            );
-          });
+  const filteredVideos: VideoRecord[] = useMemo(() => {
+    return videos.filter((v) => {
+      let matchesSearch = true;
+      if (searchQuery) {
+        const q = searchQuery.trim();
+        if (q.startsWith("#")) {
+          const clean = q.slice(1);
+          if (clean.includes(":")) {
+            const [catSearch, tagSearch] = clean.split(":");
+            matchesSearch = v.tags.some((t) => {
+              const parts = t.split(":");
+              const cat = parts[0] || "General";
+              const tagNm = parts.slice(1).join(":") || t;
+              return (
+                cat.toLowerCase().includes(catSearch.toLowerCase()) &&
+                tagNm.toLowerCase().includes(tagSearch.toLowerCase())
+              );
+            });
+          } else {
+            matchesSearch = v.tags.some((t) => {
+              const cat = t.split(":")[0] || "General";
+              return cat.toLowerCase().includes(clean.toLowerCase());
+            });
+          }
         } else {
-          matchesSearch = v.tags.some((t) => {
-            const cat = t.split(":")[0] || "General";
-            return cat.toLowerCase().includes(clean.toLowerCase());
-          });
+          const qLower = q.toLowerCase();
+          matchesSearch =
+            v.title.toLowerCase().includes(qLower) ||
+            v.resolution.toLowerCase().includes(qLower) ||
+            v.tags.some((t) => {
+              const formatted = t.replace(":", " ").toLowerCase();
+              return formatted.includes(qLower) || t.toLowerCase().includes(qLower);
+            });
         }
-      } else {
-        const qLower = q.toLowerCase();
-        matchesSearch =
-          v.title.toLowerCase().includes(qLower) ||
-          v.resolution.toLowerCase().includes(qLower) ||
-          v.tags.some((t) => {
-            const formatted = t.replace(":", " ").toLowerCase();
-            return formatted.includes(qLower) || t.toLowerCase().includes(qLower);
-          });
       }
+
+      const matchesTags =
+        selectedTags.length === 0 ||
+        (tagMatchMode === "ALL"
+          ? selectedTags.every((tag) => v.tags.includes(tag))
+          : selectedTags.some((tag) => v.tags.includes(tag)));
+
+      return matchesSearch && matchesTags;
+    });
+  }, [videos, searchQuery, selectedTags, tagMatchMode]);
+
+  // Sort filtered videos according to selected sorting option
+  const sortedVideos: VideoRecord[] = useMemo(() => {
+    switch (sortBy) {
+      case "relevant":
+        return sortVideosByRelevance(filteredVideos, {
+          playlists,
+          searchQuery,
+          selectedTags,
+          allVideos: videos,
+        });
+      case "newest":
+        return [...filteredVideos].sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        );
+      case "oldest":
+        return [...filteredVideos].sort(
+          (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+        );
+      case "title":
+        return [...filteredVideos].sort((a, b) =>
+          a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: "base" }),
+        );
+      case "duration":
+        return [...filteredVideos].sort((a, b) => (b.duration || 0) - (a.duration || 0));
+      case "playCount":
+        return [...filteredVideos].sort((a, b) => (b.playCount || 0) - (a.playCount || 0));
+      default:
+        return filteredVideos;
     }
+  }, [filteredVideos, sortBy, playlists]);
 
-    const matchesTags =
-      selectedTags.length === 0 ||
-      (tagMatchMode === "ALL"
-        ? selectedTags.every((tag) => v.tags.includes(tag))
-        : selectedTags.some((tag) => v.tags.includes(tag)));
-
-    return matchesSearch && matchesTags;
-  });
-
-  // Reset scroll to top when filters change
+  // Reset scroll to top when filters or sort changes
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = 0;
     }
-  }, [searchQuery, selectedTags]);
+  }, [searchQuery, selectedTags, sortBy]);
 
   const { visibleRange, paddingTop, paddingBottom, columnCount } =
-    useVirtualGrid(scrollRef, filteredVideos.length);
+    useVirtualGrid(scrollRef, sortedVideos.length);
 
   // Keyboard navigation & actions for video grid
   useEffect(() => {
@@ -211,21 +247,21 @@ export const VideoGridView: React.FC = () => {
           target.isContentEditable);
 
       if (isInput) return;
-      if (filteredVideos.length === 0) return;
+      if (sortedVideos.length === 0) return;
 
       const isCtrl = e.ctrlKey || e.metaKey;
 
       // Select All: Ctrl+A
       if (isCtrl && e.key.toLowerCase() === "a") {
         e.preventDefault();
-        selectAllVideos(filteredVideos.map((v) => v.id));
+        selectAllVideos(sortedVideos.map((v) => v.id));
         return;
       }
 
       // Enter: Play selected video
       if (e.key === "Enter") {
         if (selectedVideoId) {
-          const vid = filteredVideos.find((v) => v.id === selectedVideoId);
+          const vid = sortedVideos.find((v) => v.id === selectedVideoId);
           if (vid) {
             e.preventDefault();
             setPlayingVideo(vid);
@@ -256,7 +292,7 @@ export const VideoGridView: React.FC = () => {
           }
           return;
         } else if (selectedVideoId) {
-          const vid = filteredVideos.find((v) => v.id === selectedVideoId);
+          const vid = sortedVideos.find((v) => v.id === selectedVideoId);
           if (vid) {
             e.preventDefault();
             if (confirm(`Are you sure you want to delete "${vid.title}"?`)) {
@@ -272,9 +308,9 @@ export const VideoGridView: React.FC = () => {
         if (selectedVideoId) {
           e.preventDefault();
           setSelectedVideoId(null);
-        } else if (filteredVideos.length > 0) {
+        } else if (sortedVideos.length > 0) {
           e.preventDefault();
-          setSelectedVideoId(filteredVideos[0].id);
+          setSelectedVideoId(sortedVideos[0].id);
         }
         return;
       }
@@ -282,7 +318,7 @@ export const VideoGridView: React.FC = () => {
       // 'B': Open bundle inspector
       if (!isCtrl && e.key.toLowerCase() === "b") {
         if (selectedVideoId) {
-          const vid = filteredVideos.find((v) => v.id === selectedVideoId);
+          const vid = sortedVideos.find((v) => v.id === selectedVideoId);
           if (vid) {
             e.preventDefault();
             window.dispatchEvent(
@@ -301,7 +337,7 @@ export const VideoGridView: React.FC = () => {
         e.key === "ArrowDown"
       ) {
         e.preventDefault();
-        const currentIndex = filteredVideos.findIndex(
+        const currentIndex = sortedVideos.findIndex(
           (v) => v.id === selectedVideoId,
         );
 
@@ -309,19 +345,19 @@ export const VideoGridView: React.FC = () => {
         if (currentIndex === -1) {
           nextIndex = 0;
         } else if (e.key === "ArrowRight") {
-          nextIndex = Math.min(filteredVideos.length - 1, currentIndex + 1);
+          nextIndex = Math.min(sortedVideos.length - 1, currentIndex + 1);
         } else if (e.key === "ArrowLeft") {
           nextIndex = Math.max(0, currentIndex - 1);
         } else if (e.key === "ArrowDown") {
           nextIndex = Math.min(
-            filteredVideos.length - 1,
+            sortedVideos.length - 1,
             currentIndex + columnCount,
           );
         } else if (e.key === "ArrowUp") {
           nextIndex = Math.max(0, currentIndex - columnCount);
         }
 
-        const nextVideo = filteredVideos[nextIndex];
+        const nextVideo = sortedVideos[nextIndex];
         if (nextVideo) {
           setSelectedVideoId(nextVideo.id);
 
@@ -347,7 +383,7 @@ export const VideoGridView: React.FC = () => {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
-    filteredVideos,
+    sortedVideos,
     selectedVideoId,
     selectedVideoIds,
     columnCount,
@@ -359,14 +395,14 @@ export const VideoGridView: React.FC = () => {
     bulkDeleteSelectedVideos,
   ]);
 
-  const visibleVideos = filteredVideos.slice(
+  const visibleVideos = sortedVideos.slice(
     visibleRange.start,
     visibleRange.end,
   );
   const activeImportsList = Object.values(activeImports) as any[];
 
   // Indicator text
-  const totalItems = filteredVideos.length;
+  const totalItems = sortedVideos.length;
   const showingEnd = Math.min(visibleRange.end, totalItems);
   const showingStart = totalItems === 0 ? 0 : visibleRange.start + 1;
 
@@ -374,7 +410,7 @@ export const VideoGridView: React.FC = () => {
     <div className="relative flex min-h-0 flex-1 flex-col">
       {/* Scroll Container */}
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto p-2">
-        {filteredVideos.length === 0 && activeImportsList.length === 0 ? (
+        {sortedVideos.length === 0 && activeImportsList.length === 0 ? (
           /* ── Empty State ── */
           <div className="flex h-full min-h-[400px] flex-col items-center justify-center text-center text-muted">
             <div className="bg-primary/10 border-primary-border/20 mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border text-primary-text">
@@ -422,10 +458,10 @@ export const VideoGridView: React.FC = () => {
               activeImportsList.map((importTask: any) => (
                 <div
                   key={importTask.taskId}
-                  className="group relative flex flex-col overflow-hidden rounded-xl bg-surface shadow-md"
+                  className="group relative flex flex-col overflow-hidden rounded-xl bg-surface/80 border border-border/80 backdrop-blur-md shadow-md"
                 >
                   {/* Processing Thumbnail */}
-                  <div className="relative flex aspect-video w-full flex-col items-center justify-center bg-background p-3">
+                  <div className="relative flex aspect-video w-full flex-col items-center justify-center bg-background/70 p-3">
                     <div className="bg-primary/30 mb-1.5 flex h-8 w-8 items-center justify-center rounded-full text-primary-text shadow">
                       <Loader2 className="h-4 w-4 animate-spin" />
                     </div>
@@ -434,7 +470,7 @@ export const VideoGridView: React.FC = () => {
                     </span>
 
                     {/* Progress Bar */}
-                    <div className="mt-2 h-1.5 w-4/5 overflow-hidden rounded-full border border-border bg-surface p-0.5">
+                    <div className="mt-2 h-1.5 w-4/5 overflow-hidden rounded-full border border-border/80 bg-surface/80 p-0.5">
                       <div
                         className="h-full rounded-full bg-gradient-to-r from-primary to-emerald-400 transition-all duration-300"
                         style={{ width: `${importTask.percent}%` }}
@@ -442,7 +478,7 @@ export const VideoGridView: React.FC = () => {
                     </div>
 
                     {/* Step Badge */}
-                    <div className="bg-primary/95 animate-fade-in absolute left-1.5 top-1.5 flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold text-white shadow backdrop-blur">
+                    <div className="bg-primary/95 animate-fade-in absolute left-1.5 top-1.5 flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold text-white shadow backdrop-blur-md">
                       <Sparkles className="h-2.5 w-2.5 animate-pulse text-amber-300" />
                       Step {importTask.step}/4{" "}
                       {importTask.workDone !== undefined &&
@@ -453,14 +489,14 @@ export const VideoGridView: React.FC = () => {
                   </div>
 
                   {/* Card Info */}
-                  <div className="flex flex-1 flex-col justify-between gap-1 px-2 py-1">
+                  <div className="flex flex-1 flex-col justify-between gap-1 px-2 py-1 bg-surface/75 backdrop-blur-xs">
                     <div>
                       <h3 className="line-clamp-1 text-xs font-semibold text-foreground">
                         {importTask.fileName}
                       </h3>
                     </div>
 
-                    <div className="flex items-center justify-between border-t border-border pt-1.5 text-[10px] text-muted">
+                    <div className="flex items-center justify-between border-t border-border/60 pt-1.5 text-[10px] text-muted">
                       <span className="font-mono text-primary-text">
                         Step {importTask.step}/4
                       </span>
@@ -507,7 +543,7 @@ export const VideoGridView: React.FC = () => {
       {/* ── Floating Scroll Indicator Pill ── */}
       {totalItems > 0 && (
         <div className="pointer-events-none absolute bottom-4 right-4">
-          <div className="bg-surface/80 rounded-full border border-border px-3 py-1.5 text-[11px] font-medium tabular-nums text-muted shadow-lg backdrop-blur">
+          <div className="bg-surface/75 border-border/80 rounded-full border px-3 py-1.5 text-[11px] font-medium tabular-nums text-muted shadow-lg backdrop-blur-md">
             <span className="font-semibold text-foreground">
               {showingStart}–{showingEnd}
             </span>{" "}

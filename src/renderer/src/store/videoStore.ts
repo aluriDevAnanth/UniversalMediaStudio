@@ -1,6 +1,14 @@
 import { create } from "zustand";
 import { VideoRecord, PlaylistRecord, AnalyticsData } from "../env";
 
+export type SortOption =
+  | "relevant"
+  | "newest"
+  | "oldest"
+  | "title"
+  | "duration"
+  | "playCount";
+
 interface VideoStoreState {
   isAuthenticated: boolean;
   isPasswordSet: boolean;
@@ -13,6 +21,7 @@ interface VideoStoreState {
   selectedTags: string[];
   selectedPlaylistId: string | null;
   searchQuery: string;
+  sortBy: SortOption;
   activeTab: "grid" | "playlists" | "storage" | "analytics";
   playingVideo: VideoRecord | null;
   isImporting: boolean;
@@ -26,6 +35,7 @@ interface VideoStoreState {
   // Actions
   setShortcutsOpen: (open: boolean) => void;
   toggleShortcutsOpen: () => void;
+  setSortBy: (sortBy: SortOption) => void;
   updateActiveImport: (progress: any) => void;
   removeActiveImport: (taskId: string) => void;
   cancelImport: (taskId?: string) => Promise<void>;
@@ -75,6 +85,7 @@ export const useVideoStore = create<VideoStoreState>((set, get) => ({
   selectedTags: [],
   selectedPlaylistId: null,
   searchQuery: "",
+  sortBy: "relevant",
   activeTab: "grid",
   playingVideo: null,
   isImporting: false,
@@ -87,6 +98,7 @@ export const useVideoStore = create<VideoStoreState>((set, get) => ({
 
   setShortcutsOpen: (open: boolean) => set({ isShortcutsOpen: open }),
   toggleShortcutsOpen: () => set((state) => ({ isShortcutsOpen: !state.isShortcutsOpen })),
+  setSortBy: (sortBy: SortOption) => set({ sortBy }),
 
   checkAuthStatus: async () => {
     try {
