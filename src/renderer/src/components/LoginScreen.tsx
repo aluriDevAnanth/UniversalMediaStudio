@@ -79,13 +79,13 @@ export const LoginScreen: React.FC = () => {
         </div>
       </div>
 
-      <div className="w-full max-w-md bg-surface border border-border rounded-2xl p-8 shadow-2xl relative overflow-hidden">
+      <div className="glass-modal w-full max-w-md rounded-2xl p-8 relative overflow-hidden">
         {/* Glow Effects */}
-        <div className="absolute -top-24 -left-24 w-48 h-48 bg-primary/20 rounded-full blur-3xl" />
-        <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-blue-500/15 rounded-full blur-3xl" />
+        <div className="absolute -top-24 -left-24 w-48 h-48 bg-primary/25 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none" />
 
         <div className="flex flex-col items-center text-center mb-8 relative z-10">
-          <div className="w-16 h-16 rounded-2xl bg-primary/20 border border-primary-border/30 flex items-center justify-center text-primary-text mb-4 shadow-lg shadow-primary/10 animate-pulse">
+          <div className="w-16 h-16 rounded-2xl bg-primary/20 border border-primary-border/30 flex items-center justify-center text-primary-text mb-4 shadow-lg shadow-primary/10 animate-pulse backdrop-blur-sm">
             {isPasswordSet ? (
               <Lock className="w-8 h-8" />
             ) : (
@@ -117,7 +117,7 @@ export const LoginScreen: React.FC = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••••••"
-                className="w-full pl-11 pr-4 py-2.5 bg-background border border-border rounded-xl text-foreground placeholder-muted/60 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition"
+                className="glass-input w-full pl-11 pr-4 py-2.5 rounded-xl text-foreground placeholder-muted/60 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition"
                 autoFocus
               />
             </div>
@@ -135,7 +135,7 @@ export const LoginScreen: React.FC = () => {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="••••••••••••"
-                  className="w-full pl-11 pr-4 py-2.5 bg-background border border-border rounded-xl text-foreground placeholder-muted/60 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition"
+                  className="glass-input w-full pl-11 pr-4 py-2.5 rounded-xl text-foreground placeholder-muted/60 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition"
                 />
               </div>
             </div>

@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useVideoStore } from "../store/videoStore";
 import { TagDropdown } from "./TagDropdown";
+import { SortDropdown } from "./SortDropdown";
 import appIcon from "@/assets/icon.png";
 
 export const Header: React.FC = () => {
@@ -45,7 +46,7 @@ export const Header: React.FC = () => {
   const handleClose = () => window.api?.windowControls?.close();
 
   return (
-    <header className="bg-surface/90 border-border sticky top-0 z-40 border-b px-2 backdrop-blur-md transition-colors duration-200">
+    <header className="glass-header sticky top-0 z-40 px-2 transition-colors duration-200">
       {/* Single Row: Logo | Search + Tags | Actions | Window controls */}
       <div
         className="flex items-center gap-3 py-2"
@@ -53,7 +54,7 @@ export const Header: React.FC = () => {
       >
         {/* Logo */}
         <div className="flex shrink-0 items-center gap-2.5">
-          <div className="border-primary-border/30 bg-primary/20 flex h-8 w-8 items-center justify-center overflow-hidden rounded-xl border shadow-md">
+          <div className="border-primary-border/30 bg-primary/20 flex h-8 w-8 items-center justify-center overflow-hidden rounded-xl border shadow-md backdrop-blur-xs">
             <img
               src={appIcon}
               alt="App Icon"
@@ -82,7 +83,7 @@ export const Header: React.FC = () => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search or #Category:Tag... (Ctrl+K or /)"
-              className="border-border bg-background text-foreground placeholder-muted focus:border-primary w-full rounded-xl border py-1.5 pr-8 pl-9 text-xs transition focus:outline-none"
+              className="glass-input text-foreground placeholder-muted focus:border-primary w-full rounded-xl py-1.5 pr-8 pl-9 text-xs transition focus:outline-none"
             />
             {searchQuery && (
               <button
@@ -104,6 +105,9 @@ export const Header: React.FC = () => {
             }
             placeholder="All Tags"
           />
+
+          {/* Sort Dropdown */}
+          <SortDropdown />
         </div>
 
         {/* Action Buttons + Window Controls */}
@@ -124,7 +128,7 @@ export const Header: React.FC = () => {
           <button
             onClick={toggleShortcutsOpen}
             title="Keyboard Shortcuts (? or Ctrl+/)"
-            className="border-border bg-surface text-muted hover:bg-surface-hover hover:text-foreground cursor-pointer rounded-xl border p-1.5 transition"
+            className="glass-pill text-muted hover:bg-surface-hover hover:text-foreground cursor-pointer rounded-xl p-1.5 transition shadow-2xs"
           >
             <Keyboard className="h-3.5 w-3.5" />
           </button>
@@ -137,7 +141,7 @@ export const Header: React.FC = () => {
                 ? "Switch to Light Mode (Ctrl+D)"
                 : "Switch to Dark Mode (Ctrl+D)"
             }
-            className="border-border bg-surface text-muted hover:bg-surface-hover hover:text-foreground cursor-pointer rounded-xl border p-1.5 transition"
+            className="glass-pill text-muted hover:bg-surface-hover hover:text-foreground cursor-pointer rounded-xl p-1.5 transition shadow-2xs"
           >
             {theme === "dark" ? (
               <Sun className="h-3.5 w-3.5 animate-pulse text-amber-500" />
@@ -149,7 +153,7 @@ export const Header: React.FC = () => {
           <button
             onClick={lockApp}
             title="Lock Studio (Ctrl+L)"
-            className="border-border bg-surface text-muted hover:bg-surface-hover hover:text-foreground cursor-pointer rounded-xl border p-1.5 transition"
+            className="glass-pill text-muted hover:bg-surface-hover hover:text-foreground cursor-pointer rounded-xl p-1.5 transition shadow-2xs"
           >
             <Lock className="h-3.5 w-3.5" />
           </button>

@@ -42,10 +42,10 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
     <div
       onMouseEnter={() => setLeftSidebarHovered(true)}
       onMouseLeave={() => setLeftSidebarHovered(false)}
-      className={`border-border bg-surface relative flex h-full shrink-0 flex-col overflow-hidden border-r transition-all duration-300 ease-in-out ${leftSidebarExpanded ? "w-52" : "w-10"} `}
+      className={`glass-sidebar relative flex h-full shrink-0 flex-col overflow-hidden transition-all duration-300 ease-in-out ${leftSidebarExpanded ? "w-52" : "w-10"} `}
     >
       {/* Sidebar header — mode cycle button */}
-      <div className="border-border flex items-center justify-between border-b px-1 py-3">
+      <div className="border-border/60 flex items-center justify-between border-b px-1 py-3">
         {leftSidebarExpanded && (
           <span className="text-muted truncate pl-1 text-[10px] font-bold tracking-widest uppercase">
             Navigation
@@ -100,8 +100,8 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
             title={`${label} (${shortcut})`}
             className={`flex w-full cursor-pointer items-center justify-between rounded-xl px-2 py-3 text-xs font-semibold transition-all duration-150 ${
               activeTab === id
-                ? "bg-primary/15 text-primary-text"
-                : "text-muted hover:text-foreground hover:bg-surface-hover"
+                ? "bg-primary/20 text-primary-text border-primary-border/40 border shadow-2xs backdrop-blur-md font-bold"
+                : "text-muted hover:text-foreground hover:bg-surface-hover/70"
             } `}
           >
             <div className="flex items-center gap-3">
@@ -109,7 +109,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
               {leftSidebarExpanded && <span className="truncate">{label}</span>}
             </div>
             {leftSidebarExpanded && (
-              <kbd className="border-border bg-background/50 text-muted hidden rounded border px-1.5 py-0.5 font-mono text-[9px] font-bold group-hover:inline-block sm:inline-block">
+              <kbd className="border-border/80 bg-background/60 text-muted hidden rounded border px-1.5 py-0.5 font-mono text-[9px] font-bold group-hover:inline-block sm:inline-block">
                 {shortcut.replace("Ctrl+", "^")}
               </kbd>
             )}
@@ -140,7 +140,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
         <button
           onClick={onOpenTagManager}
           title="Tag Manager (Ctrl+T)"
-          className="text-foreground hover:bg-surface-hover flex w-full cursor-pointer items-center justify-between rounded-xl px-2.5 py-2 text-xs font-semibold transition"
+          className="text-foreground hover:bg-surface-hover/70 flex w-full cursor-pointer items-center justify-between rounded-xl px-2.5 py-2 text-xs font-semibold transition backdrop-blur-xs"
         >
           <div className="flex items-center gap-2.5">
             <Tag className="text-primary-text h-4 w-4 shrink-0" />
@@ -149,7 +149,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
             )}
           </div>
           {leftSidebarExpanded && (
-            <kbd className="border-border bg-background/50 text-muted rounded border px-1.5 py-0.5 font-mono text-[9px] font-bold">
+            <kbd className="border-border/80 bg-background/60 text-muted rounded border px-1.5 py-0.5 font-mono text-[9px] font-bold">
               ^T
             </kbd>
           )}

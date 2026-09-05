@@ -26,11 +26,11 @@ export const MediaDetailsPanel: React.FC<MediaDetailsPanelProps> = ({
   return (
     <div
       data-details-panel
-      className="border-border bg-surface flex h-full w-80 shrink-0 flex-col overflow-hidden border-l transition-all duration-300"
+      className="glass-surface flex h-full w-80 shrink-0 flex-col overflow-hidden border-l border-white/20 dark:border-white/10 transition-all duration-300 shadow-2xl"
     >
       <div className="flex h-full flex-1 flex-col overflow-hidden">
         {/* Header */}
-        <div className="border-border flex items-center justify-between border-b p-4">
+        <div className="border-border/60 flex items-center justify-between border-b p-4">
           <h3 className="text-foreground flex items-center gap-2 text-xs font-bold tracking-wider uppercase">
             <Info className="text-primary-text h-4 w-4" />
             Media Details
@@ -46,7 +46,7 @@ export const MediaDetailsPanel: React.FC<MediaDetailsPanelProps> = ({
         {/* Scrollable details content */}
         <div className="flex-1 space-y-3 overflow-y-auto p-2">
           {/* Visual Preview Frame */}
-          <div className="group/sidebar border-border bg-background relative aspect-video overflow-hidden rounded-xl border shadow-inner">
+          <div className="group/sidebar border-border/80 bg-background/60 relative aspect-video overflow-hidden rounded-xl border shadow-inner backdrop-blur-xs">
             <img
               src={`adaumc://${selectedVideo.id}/thumbnail`}
               alt={selectedVideo.title}
@@ -54,13 +54,13 @@ export const MediaDetailsPanel: React.FC<MediaDetailsPanelProps> = ({
             />
             <button
               onClick={() => setPlayingVideo(selectedVideo)}
-              className="absolute inset-0 flex cursor-pointer items-center justify-center bg-slate-950/45 opacity-0 transition duration-300 group-hover/sidebar:opacity-100"
+              className="absolute inset-0 flex cursor-pointer items-center justify-center bg-slate-950/45 opacity-0 transition duration-300 group-hover/sidebar:opacity-100 backdrop-blur-2xs"
             >
               <div className="bg-primary flex h-12 w-12 scale-90 transform items-center justify-center rounded-full text-white shadow-lg transition duration-300 group-hover/sidebar:scale-100">
                 <Play className="ml-1 h-5 w-5 fill-current" />
               </div>
             </button>
-            <div className="bg-primary absolute bottom-2 left-2 rounded px-1.5 py-0.5 text-[9px] font-bold text-white">
+            <div className="bg-primary absolute bottom-2 left-2 rounded px-1.5 py-0.5 text-[9px] font-bold text-white shadow-xs">
               {selectedVideo.resolution}
             </div>
           </div>
@@ -76,7 +76,7 @@ export const MediaDetailsPanel: React.FC<MediaDetailsPanelProps> = ({
           </div>
 
           {/* Tag Editor Section */}
-          <div className="border-border bg-background/50 flex flex-col gap-1.5 rounded-xl border p-3">
+          <div className="glass-card flex flex-col gap-1.5 rounded-xl p-3">
             <span className="text-muted flex items-center gap-1.5 text-[11px] font-bold tracking-wider uppercase">
               Video Tags
             </span>
@@ -89,7 +89,7 @@ export const MediaDetailsPanel: React.FC<MediaDetailsPanelProps> = ({
           </div>
 
           {/* Metadata Grid */}
-          <div className="bg-background/50 border-border grid grid-cols-2 gap-3 rounded-xl border p-3 text-xs">
+          <div className="glass-card grid grid-cols-2 gap-3 rounded-xl p-3 text-xs">
             <div>
               <span className="text-muted block text-[10px] font-medium uppercase">
                 Duration
