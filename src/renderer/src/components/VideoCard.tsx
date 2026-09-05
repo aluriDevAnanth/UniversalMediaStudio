@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Play, Clock, Star, Trash2, Sparkles, Check } from "lucide-react";
+import { Clock, Star, Trash2, Sparkles, Check } from "lucide-react";
 import { VideoRecord } from "../env";
 import { useVideoStore } from "../store/videoStore";
 import { BundleExplorerModal } from "./BundleExplorerModal";
@@ -72,20 +72,22 @@ export const VideoCard: React.FC<VideoCardProps> = ({ video }) => {
           e.preventDefault();
           setContextMenu({ x: e.clientX, y: e.clientY });
         }}
-        className={`hover:shadow-primary/10 group relative flex cursor-pointer flex-col overflow-hidden rounded-xl border bg-surface shadow-md transition-all duration-300 ${
+        className={`glass-card group relative flex cursor-pointer flex-col overflow-hidden rounded-xl transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl ${
           isMultiSelected
-            ? "ring-primary/40 border-primary bg-primary/5 ring-2"
+            ? "ring-primary/50 border-primary ring-2 shadow-lg"
             : isSelected
-              ? "ring-primary/30 border-primary ring-2"
-              : "hover:border-primary/50 border-border"
+              ? "ring-primary/40 border-primary ring-2 shadow-md"
+              : "hover:border-primary/50"
         }`}
       >
-        <div className="relative aspect-video overflow-hidden bg-black/60">
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            setPlayingVideo(video);
+          }}
+          className="relative aspect-video cursor-pointer overflow-hidden bg-black/60"
+        >
           <img
-            onClick={(e) => {
-              e.stopPropagation();
-              setPlayingVideo(video);
-            }}
             src={isHovered ? animatedGifUrl : staticThumbUrl}
             alt={video.title}
             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
@@ -103,7 +105,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({ video }) => {
               e.stopPropagation();
               toggleVideoSelection(video.id);
             }}
-            className={`absolute left-2 top-2 z-10 flex h-5 w-5 cursor-pointer items-center justify-center rounded-md border transition ${
+            className={`absolute left-2 top-2 z-10 flex h-5 w-5 cursor-pointer items-center justify-center rounded-md border transition backdrop-blur-sm ${
               isMultiSelected
                 ? "border-primary bg-primary text-white shadow-md"
                 : "border-white/30 bg-black/50 text-transparent opacity-0 group-hover:opacity-100"
@@ -115,20 +117,6 @@ export const VideoCard: React.FC<VideoCardProps> = ({ video }) => {
             }
           >
             <Check className="h-3.5 w-3.5 stroke-[3]" />
-          </div>
-
-          {/* Hover Play Overlay */}
-          <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setPlayingVideo(video);
-              }}
-              className="bg-primary/90 cursor-pointer rounded-full border border-white/20 bg-primary p-3.5 text-white opacity-0 shadow-lg transition-opacity hover:scale-110 group-hover:opacity-100"
-              title="Play Video"
-            >
-              <Play className="size-6 fill-current" />
-            </button>
           </div>
 
           {/* Badges Overlay */}
@@ -143,7 +131,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({ video }) => {
         </div>
 
         {/* Card Content Footer */}
-        <div className="flex flex-1 flex-col justify-between bg-surface px-2 py-1">
+        <div className="flex flex-1 flex-col justify-between bg-surface/50 backdrop-blur-md px-2 py-1">
           <div>
             <div
               className="line-clamp-1 text-xs font-bold text-foreground transition group-hover:text-primary-text"

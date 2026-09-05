@@ -45,40 +45,27 @@ export const TagBadge: React.FC<TagBadgeProps> = ({
   const { category, name, full } = parseTag(rawTag);
   const color = getCategoryColor(category, categoryColors);
 
-  // Size specifications
-  const sizeClasses = {
-    xs: "text-[9px] px-1.5 py-0.5 gap-1 rounded-md",
-    sm: "text-[11px] px-2 py-0.5 gap-1.5 rounded-lg",
-    md: "text-xs px-2.5 py-1 gap-2 rounded-xl",
-  }[size];
+  const sizeClasses =
+    size === "xs"
+      ? "text-[8px] gap-0.5 rounded"
+      : size === "md"
+        ? "text-[11px] gap-1.5 rounded-md"
+        : "text-[9px] gap-1 rounded-md";
 
-  const dotSizeClasses = {
-    xs: "w-1 h-1",
-    sm: "w-1.5 h-1.5",
-    md: "w-2 h-2",
-  }[size];
+  const iconSizeClasses = size === "xs" ? "w-2 h-2" : "w-2.5 h-2.5";
 
-  const iconSizeClasses = {
-    xs: "w-2.5 h-2.5",
-    sm: "w-3 h-3",
-    md: "w-3.5 h-3.5",
-  }[size];
-
-  // Dynamic color styling based on variant
   let style: React.CSSProperties = {};
   let variantClass = "";
 
   if (variant === "solid") {
     style = {
-      backgroundColor: color,
-      borderColor: color,
+      backgroundColor: "transparent",
       color: "#ffffff",
     };
     variantClass = "shadow-xs font-semibold";
   } else if (variant === "outline") {
     style = {
       backgroundColor: "transparent",
-      borderColor: color,
       color: color,
     };
     variantClass = "border font-medium";
@@ -86,11 +73,9 @@ export const TagBadge: React.FC<TagBadgeProps> = ({
     // subtle (default)
     const baseStyle = getTagStyle(color);
     style = {
-      backgroundColor: selected ? `${color}35` : baseStyle.backgroundColor,
-      borderColor: selected ? color : baseStyle.borderColor,
       color: baseStyle.color,
     };
-    variantClass = `border font-semibold ${selected ? "ring-1" : ""}`;
+    variantClass = `  font-semibold ${selected ? "ring-1" : ""}`;
   }
 
   const isClickable = !!onClick;
@@ -101,15 +86,13 @@ export const TagBadge: React.FC<TagBadgeProps> = ({
       style={style}
       onClick={onClick}
       title={title || full}
-      className={`inline-flex items-center select-none transition-all duration-150 ${sizeClasses} ${variantClass} ${
-        isClickable
-          ? "cursor-pointer hover:brightness-110 active:scale-95"
-          : ""
+      className={`inline-flex items-center transition-all duration-150 select-none ${sizeClasses} ${variantClass} ${
+        isClickable ? "cursor-pointer hover:brightness-110 active:scale-95" : ""
       } ${className}`}
     >
       {showDot && (
         <span
-          className={`shrink-0 rounded-full ${dotSizeClasses}`}
+          className="h-1.5 w-1.5 shrink-0 rounded-full shadow-xs"
           style={{ backgroundColor: color }}
         />
       )}
@@ -119,7 +102,7 @@ export const TagBadge: React.FC<TagBadgeProps> = ({
       <span className="flex items-center gap-0.5 truncate">
         {showCategory && !isGeneral && (
           <>
-            <span className="opacity-75 font-normal">
+            <span className="font-normal opacity-75">
               <HighlightText text={category} query={searchQuery} />:
             </span>
           </>
@@ -137,7 +120,7 @@ export const TagBadge: React.FC<TagBadgeProps> = ({
             onRemove(e);
           }}
           title={`Remove tag ${name}`}
-          className="ml-0.5 shrink-0 -mr-0.5 cursor-pointer rounded-full p-0.5 opacity-60 transition hover:bg-black/20 hover:opacity-100 dark:hover:bg-white/20"
+          className="-mr-0.5 ml-0.5 shrink-0 cursor-pointer rounded-full p-0.5 opacity-60 transition hover:bg-black/20 hover:opacity-100 dark:hover:bg-white/20"
         >
           <X className={iconSizeClasses} />
         </button>

@@ -95,16 +95,16 @@ export const TagManagerDialog: React.FC<TagManagerDialogProps> = ({
 
   return (
     <div
-      className="animate-fade-in fixed inset-0 z-100 flex items-center justify-center bg-slate-950/70 backdrop-blur-md p-4"
+      className="animate-fade-in fixed inset-0 z-100 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-2xl"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="border-border bg-surface flex h-[90vh] max-h-[90vh] w-[92vw] max-w-5xl flex-col overflow-hidden rounded-2xl border shadow-2xl">
+      <div className="glass-modal flex h-[90vh] max-h-[90vh] w-[92vw] flex-col overflow-hidden rounded-2xl">
         {/* Dialog Header */}
-        <div className="border-border bg-background/60 flex items-center justify-between border-b px-4 py-3">
+        <div className="border-border/60 bg-background/50 backdrop-blur-sm flex items-center justify-between border-b px-4 py-3">
           <div className="flex items-center gap-2.5">
-            <div className="bg-primary/15 text-primary-text flex h-8 w-8 items-center justify-center rounded-lg border border-primary/25">
+            <div className="bg-primary/15 text-primary-text border-primary/25 flex h-8 w-8 items-center justify-center rounded-lg border">
               <Tag className="h-4 w-4" />
             </div>
             <div>
@@ -112,7 +112,8 @@ export const TagManagerDialog: React.FC<TagManagerDialogProps> = ({
                 Taxonomy & Tag Manager
               </h2>
               <p className="text-muted text-[11px]">
-                Organize, color-code, and manage all taxonomy categories and tags across your library
+                Organize, color-code, and manage all taxonomy categories and
+                tags across your library
               </p>
             </div>
           </div>
@@ -142,7 +143,7 @@ export const TagManagerDialog: React.FC<TagManagerDialogProps> = ({
         >
           {/* Category Combobox */}
           <div ref={catComboboxRef} className="relative w-48 shrink-0">
-            <div className="border-border bg-background focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/30 flex items-center justify-between rounded-lg border px-2.5 py-1.5 transition">
+            <div className="border-border bg-background focus-within:border-primary focus-within:ring-primary/30 flex items-center justify-between rounded-lg border px-2.5 py-1.5 transition focus-within:ring-1">
               <input
                 type="text"
                 value={newCatInput}
@@ -207,12 +208,12 @@ export const TagManagerDialog: React.FC<TagManagerDialogProps> = ({
             value={newNameInput}
             onChange={(e) => setNewNameInput(e.target.value)}
             placeholder="New tag name (e.g. 4K, Synthwave)..."
-            className="border-border bg-background text-foreground placeholder-muted/60 focus:border-primary focus:ring-1 focus:ring-primary/30 flex-1 min-w-44 rounded-lg border px-3 py-1.5 text-xs focus:outline-none transition"
+            className="border-border bg-background text-foreground placeholder-muted/60 focus:border-primary focus:ring-primary/30 min-w-44 flex-1 rounded-lg border px-3 py-1.5 text-xs transition focus:ring-1 focus:outline-none"
           />
 
           {/* Color Selector */}
-          <div className="flex items-center gap-1.5 shrink-0 bg-background/60 border border-border/80 rounded-lg px-2 py-1">
-            <span className="text-muted text-[10px] font-semibold uppercase tracking-wider mr-0.5">
+          <div className="bg-background/60 border-border/80 flex shrink-0 items-center gap-1.5 rounded-lg border px-2 py-1">
+            <span className="text-muted mr-0.5 text-[10px] font-semibold tracking-wider uppercase">
               Color:
             </span>
             {PRESET_TAG_COLORS.slice(0, 6).map((c) => (
@@ -228,8 +229,8 @@ export const TagManagerDialog: React.FC<TagManagerDialogProps> = ({
                 style={{ backgroundColor: c }}
                 className={`h-4 w-4 cursor-pointer rounded-full transition-transform ${
                   selectedColor === c
-                    ? "ring-2 ring-white scale-110"
-                    : "opacity-60 hover:opacity-100 hover:scale-110"
+                    ? "scale-110 ring-2 ring-white"
+                    : "opacity-60 hover:scale-110 hover:opacity-100"
                 }`}
                 title={`Set category color ${c}`}
               />
@@ -269,7 +270,7 @@ export const TagManagerDialog: React.FC<TagManagerDialogProps> = ({
         </form>
 
         {/* Filter & Search Bar */}
-        <div className="border-border/70 bg-background/30 flex items-center justify-between border-b px-4 py-2">
+        <div className="border-border/70 bg-background/30 flex items-center justify-between border-b px-2 py-1">
           <div className="flex items-center gap-2">
             <span className="text-muted text-xs font-bold tracking-wider uppercase">
               Taxonomy Categories ({categories.length})
@@ -287,7 +288,7 @@ export const TagManagerDialog: React.FC<TagManagerDialogProps> = ({
               value={filterQuery}
               onChange={(e) => setFilterQuery(e.target.value)}
               placeholder="Search category or tag..."
-              className="border-border bg-background text-foreground placeholder:text-muted focus:border-primary focus:ring-1 focus:ring-primary/30 w-full rounded-lg border py-1 pr-7 pl-7 text-xs focus:outline-none transition"
+              className="border-border bg-background text-foreground placeholder:text-muted focus:border-primary focus:ring-primary/30 w-full rounded-lg border py-1 pr-7 pl-7 text-xs transition focus:ring-1 focus:outline-none"
             />
             {filterQuery && (
               <button
@@ -302,7 +303,7 @@ export const TagManagerDialog: React.FC<TagManagerDialogProps> = ({
         </div>
 
         {/* Scrollable Taxonomy List - Fills Remaining Viewport Height */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
+        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2">
           {tags.length === 0 ? (
             <div className="text-muted flex h-full flex-col items-center justify-center py-16 text-center">
               <Tag className="mb-3 h-10 w-10 opacity-30" />
@@ -322,8 +323,10 @@ export const TagManagerDialog: React.FC<TagManagerDialogProps> = ({
             }).length === 0 ? (
             <div className="text-muted flex h-full flex-col items-center justify-center py-16 text-center text-xs">
               <Search className="mb-2 h-8 w-8 opacity-30" />
-              <p className="font-semibold">No matching tags or categories found</p>
-              <p className="mt-1 text-muted/70">
+              <p className="font-semibold">
+                No matching tags or categories found
+              </p>
+              <p className="text-muted/70 mt-1">
                 Try searching for a different keyword or create a new tag above.
               </p>
             </div>
@@ -370,10 +373,7 @@ export const TagManagerDialog: React.FC<TagManagerDialogProps> = ({
                 };
 
                 const handleSaveEdit = async (t: string) => {
-                  const newFormatted = formatTag(
-                    editCatInput,
-                    editNameInput,
-                  );
+                  const newFormatted = formatTag(editCatInput, editNameInput);
                   if (newFormatted && newFormatted !== t) {
                     await renameTag(t, newFormatted);
                   }
@@ -383,10 +383,10 @@ export const TagManagerDialog: React.FC<TagManagerDialogProps> = ({
                 return (
                   <div
                     key={category}
-                    className="group/cat border-border/70 bg-surface/40 hover:border-border hover:bg-surface/60 rounded-xl border p-3 transition shadow-xs"
+                    className="group/cat border-border bg-surface hover:bg-surface-hover/30 rounded-xl border p-2.5 shadow-xs transition"
                   >
                     {/* Category Header Row */}
-                    <div className="flex items-center justify-between pb-2 border-b border-border/40">
+                    <div className="border-border flex items-center justify-between border-b pb-2">
                       <div className="flex items-center gap-2">
                         {/* Category Bulk Checkbox */}
                         <input
@@ -407,15 +407,16 @@ export const TagManagerDialog: React.FC<TagManagerDialogProps> = ({
                         {/* Category Color Indicator */}
                         <span
                           style={{ backgroundColor: catColor }}
-                          className="h-3 w-3 shrink-0 rounded-full shadow-xs"
+                          className="h-3 w-3 shrink-0 rounded-full shadow-xs ring-1 ring-white/20"
                         />
 
-                        <h3 className="text-foreground text-xs font-extrabold tracking-wider uppercase">
+                        <h3 className="text-foreground text-xs font-bold tracking-wider uppercase">
                           {category}
                         </h3>
 
-                        <span className="text-muted bg-background/80 border-border/80 rounded-full border px-2 py-0.5 text-[10px] font-medium">
-                          {allCatTags.length} tag{allCatTags.length !== 1 ? "s" : ""}
+                        <span className="text-foreground/80 bg-background border-border rounded-full border px-2 py-0.5 text-[10px] font-semibold">
+                          {allCatTags.length} tag
+                          {allCatTags.length !== 1 ? "s" : ""}
                         </span>
                       </div>
 
@@ -430,8 +431,8 @@ export const TagManagerDialog: React.FC<TagManagerDialogProps> = ({
                               style={{ backgroundColor: c }}
                               className={`h-3 w-3 cursor-pointer rounded-full transition-transform ${
                                 catColor === c
-                                  ? "scale-125 ring-1.5 ring-white"
-                                  : "opacity-40 hover:opacity-100 hover:scale-110"
+                                  ? "ring-1.5 scale-125 ring-white"
+                                  : "opacity-40 hover:scale-110 hover:opacity-100"
                               }`}
                               title={`Set ${category} color to ${c}`}
                             />
@@ -452,7 +453,7 @@ export const TagManagerDialog: React.FC<TagManagerDialogProps> = ({
                             }
                           }}
                           title={`Delete category "${category}" and its tags`}
-                          className="text-muted hover:bg-rose-500/15 hover:text-rose-500 cursor-pointer rounded p-1 transition"
+                          className="text-muted cursor-pointer rounded p-1 transition hover:bg-rose-500/15 hover:text-rose-400"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
@@ -460,7 +461,7 @@ export const TagManagerDialog: React.FC<TagManagerDialogProps> = ({
                     </div>
 
                     {/* Tags Wrapped Chips */}
-                    <div className="flex flex-wrap gap-2 pt-2.5">
+                    <div className="flex flex-wrap gap-1.5 pt-2">
                       {catTags.map((t) => {
                         const { category: cName, name: tName } = parseTag(t);
                         const isEditing = editingTag === t;
@@ -472,7 +473,7 @@ export const TagManagerDialog: React.FC<TagManagerDialogProps> = ({
                           return (
                             <div
                               key={t}
-                              className="border-primary/60 bg-background flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs shadow-md"
+                              className="border-primary bg-background flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs shadow-md ring-1 ring-primary/40"
                             >
                               <input
                                 type="text"
@@ -523,7 +524,7 @@ export const TagManagerDialog: React.FC<TagManagerDialogProps> = ({
                         return (
                           <div
                             key={t}
-                            className="group/tag border-border/70 bg-surface/80 hover:bg-surface hover:border-primary/50 flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs shadow-2xs transition-all duration-150"
+                            className="group/tag border-border bg-background hover:bg-surface-hover hover:border-primary/60 flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs shadow-2xs transition-all duration-150"
                           >
                             <TagBadge
                               rawTag={t}
@@ -531,12 +532,12 @@ export const TagManagerDialog: React.FC<TagManagerDialogProps> = ({
                               showDot
                               showCategory={false}
                             />
-                            <span className="text-muted bg-background/60 rounded px-1.5 py-0.5 text-[10px] font-medium">
-                              {videoCount} vid{videoCount !== 1 ? "s" : ""}
+                            <span className="text-foreground/90 bg-surface border-border rounded border px-1.5 py-0.5 text-[10px] font-bold">
+                              {videoCount}
                             </span>
 
-                            {/* Action buttons ONLY shown on hover over this tag */}
-                            <div className="flex items-center gap-0.5 opacity-0 pointer-events-none group-hover/tag:opacity-100 group-hover/tag:pointer-events-auto transition-opacity duration-150 ml-0.5">
+                            {/* Action buttons ONLY shown on hover over this tag without occupying blank layout space */}
+                            <div className="hidden group-hover/tag:inline-flex items-center gap-0.5 ml-0.5">
                               <button
                                 onClick={() => {
                                   setEditingTag(t);
@@ -559,7 +560,7 @@ export const TagManagerDialog: React.FC<TagManagerDialogProps> = ({
                                   }
                                 }}
                                 title="Delete tag globally"
-                                className="text-muted hover:bg-rose-500/20 hover:text-rose-500 cursor-pointer rounded p-1 transition"
+                                className="text-muted cursor-pointer rounded p-1 transition hover:bg-rose-500/20 hover:text-rose-400"
                               >
                                 <Trash2 className="h-3 w-3" />
                               </button>
@@ -581,7 +582,7 @@ export const TagManagerDialog: React.FC<TagManagerDialogProps> = ({
           </span>
           <button
             onClick={onClose}
-            className="border-border bg-surface text-muted hover:border-primary-border/40 hover:text-foreground cursor-pointer rounded-lg border px-4 py-1.5 text-xs font-semibold transition shadow-xs"
+            className="border-border bg-surface text-muted hover:border-primary-border/40 hover:text-foreground cursor-pointer rounded-lg border px-4 py-1.5 text-xs font-semibold shadow-xs transition"
           >
             Close
           </button>
