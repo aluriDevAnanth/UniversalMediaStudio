@@ -38,7 +38,9 @@ export interface BuildAdaumcInput {
 }
 
 export const ADAUMC_MAGIC = Buffer.from([0x41, 0x44, 0x41, 0x55, 0x4d, 0x43]); // 'ADAUMC' (6 Bytes)
-const MASK_KEY = Buffer.from("AdaumcSecretKey2026!"); // Stream cipher XOR key
+const MASK_KEY = Buffer.from("AdaumcSecretKey2026!"); // Stream cipher XOR key (20 Bytes)
+// Pre-repeat 20-byte key to 80 bytes for fast unrolled word alignment
+const REPEATED_KEY = Buffer.concat([MASK_KEY, MASK_KEY, MASK_KEY, MASK_KEY]);
 
 class CipherTransform extends Transform {
   private offset: number;
@@ -56,7 +58,7 @@ class CipherTransform extends Transform {
 
 export class BundleManager {
   /**
-   * Stream cipher XOR mask function (optimized with loop unrolling)
+   * Fast stream cipher XOR mask function with 8-byte unrolled loop
    */
   public static applyStreamCipherMask(
     data: Buffer,
@@ -64,22 +66,26 @@ export class BundleManager {
   ): Buffer {
     const len = data.length;
     const result = Buffer.allocUnsafe(len);
-    const keyLen = MASK_KEY.length;
+    const keyLen = 20;
     let keyIdx = startOffset % keyLen;
 
     let i = 0;
-    const fastLimit = len - 4;
+    const fastLimit = len - 8;
     while (i <= fastLimit) {
-      result[i] = data[i] ^ MASK_KEY[keyIdx];
-      result[i + 1] = data[i + 1] ^ MASK_KEY[(keyIdx + 1) % keyLen];
-      result[i + 2] = data[i + 2] ^ MASK_KEY[(keyIdx + 2) % keyLen];
-      result[i + 3] = data[i + 3] ^ MASK_KEY[(keyIdx + 3) % keyLen];
-      keyIdx = (keyIdx + 4) % keyLen;
-      i += 4;
+      result[i] = data[i] ^ REPEATED_KEY[keyIdx];
+      result[i + 1] = data[i + 1] ^ REPEATED_KEY[keyIdx + 1];
+      result[i + 2] = data[i + 2] ^ REPEATED_KEY[keyIdx + 2];
+      result[i + 3] = data[i + 3] ^ REPEATED_KEY[keyIdx + 3];
+      result[i + 4] = data[i + 4] ^ REPEATED_KEY[keyIdx + 4];
+      result[i + 5] = data[i + 5] ^ REPEATED_KEY[keyIdx + 5];
+      result[i + 6] = data[i + 6] ^ REPEATED_KEY[keyIdx + 6];
+      result[i + 7] = data[i + 7] ^ REPEATED_KEY[keyIdx + 7];
+      keyIdx = (keyIdx + 8) % keyLen;
+      i += 8;
     }
 
     while (i < len) {
-      result[i] = data[i] ^ MASK_KEY[keyIdx];
+      result[i] = data[i] ^ REPEATED_KEY[keyIdx];
       keyIdx = (keyIdx + 1) % keyLen;
       i++;
     }
@@ -136,12 +142,20 @@ export class BundleManager {
       ],
     };
 
-    const jsonStr = JSON.stringify(metadata);
+    const HEADER_OFFSET = 16384;
+    const targetLength = HEADER_OFFSET - 10;
+    let jsonStr = JSON.stringify(metadata);
+    if (jsonStr.length < targetLength) {
+      jsonStr = jsonStr.padEnd(targetLength, " ");
+    } else {
+      jsonStr = jsonStr.substring(0, targetLength);
+    }
+
     const jsonBuf = Buffer.from(jsonStr, "utf-8");
     const encryptedIndex = this.applyStreamCipherMask(jsonBuf, 0);
     const indexLength = encryptedIndex.length;
 
-    // Write file: [MAGIC 6B] [INDEX_LEN 4B] [ENCRYPTED_INDEX] [STREAM_CIPHER_PAYLOADS...]
+    // Write file: [MAGIC 6B] [INDEX_LEN 4B] [ENCRYPTED_INDEX 16374B] [STREAM_CIPHER_PAYLOADS...]
     const writeStream = fs.createWriteStream(input.outputPath, {
       highWaterMark: 1024 * 1024,
     });
@@ -357,12 +371,21 @@ export class BundleManager {
 
     const fd = fs.openSync(bundlePath, "r+");
     try {
-      fs.writeSync(fd, encryptedIndex, 0, targetLength, 10);
+      const lenBuf = Buffer.alloc(4);
+      lenBuf.writeUInt32BE(encryptedIndex.length, 0);
+      fs.writeSync(fd, lenBuf, 0, 4, 6);
+      fs.writeSync(fd, encryptedIndex, 0, encryptedIndex.length, 10);
     } finally {
       fs.closeSync(fd);
     }
 
     this.metadataCache.delete(bundlePath);
+    // Invalidate cached asset slices for this bundle
+    for (const key of this.assetSliceCache.keys()) {
+      if (key.startsWith(`${bundlePath}:`)) {
+        this.assetSliceCache.delete(key);
+      }
+    }
   }
 
   /**
@@ -390,14 +413,13 @@ export class BundleManager {
     }
 
     const vttBuf = Buffer.from(vttText, "utf-8");
+    const { metadata, payloadStartOffset } = this.readMetadata(bundlePath);
     const stat = fs.statSync(bundlePath);
-    const HEADER_OFFSET = 16384;
-    const currentOffset = Math.max(0, stat.size - HEADER_OFFSET);
+    const currentOffset = Math.max(0, stat.size - payloadStartOffset);
 
     const encryptedSub = this.applyStreamCipherMask(vttBuf, currentOffset);
     fs.appendFileSync(bundlePath, encryptedSub);
 
-    const { metadata } = this.readMetadata(bundlePath);
     const cleanLang = (lang || "en").toLowerCase().replace(/[^a-z0-9]/g, "");
     const subCount =
       Object.keys(metadata.assets || {}).filter((k) => k.startsWith("sub_")).length + 1;
@@ -445,6 +467,8 @@ export class BundleManager {
     assetKey: string,
     startByte?: number,
     endByte?: number,
+    maxChunkSize?: number,
+    abortSignal?: AbortSignal,
   ): {
     stream: ReadableStream;
     mimeType: string;
@@ -465,18 +489,44 @@ export class BundleManager {
     const totalSize = asset.length || asset.size || 0;
 
     const start = startByte !== undefined ? Math.max(0, startByte) : 0;
-    const end =
-      endByte !== undefined ? Math.min(totalSize - 1, endByte) : totalSize - 1;
+    let end: number;
+
+    if (endByte !== undefined) {
+      end = Math.min(totalSize - 1, endByte);
+    } else if (maxChunkSize && maxChunkSize > 0) {
+      // Adaptive chunk sizing for open-ended Range requests (prevents over-buffering memory stalls)
+      end = Math.min(totalSize - 1, start + maxChunkSize - 1);
+    } else {
+      end = totalSize - 1;
+    }
 
     // Asynchronous file stream using highWaterMark buffer for smooth 1080p/4K playback
     const fileStream = fs.createReadStream(bundlePath, {
       start: assetStartInFile + start,
       end: assetStartInFile + end,
-      highWaterMark: 1024 * 1024, // 1MB chunk size
+      highWaterMark: 1024 * 1024, // 1MB buffer
     });
 
     const cipherTransform = new CipherTransform(asset.offset + start);
     const transformedStream = fileStream.pipe(cipherTransform);
+
+    // AbortSignal lifecycle cleanup: immediately destroy abandoned streams upon client seek/pause
+    if (abortSignal) {
+      if (abortSignal.aborted) {
+        fileStream.destroy();
+        cipherTransform.destroy();
+      } else {
+        const onAbort = () => {
+          fileStream.destroy();
+          cipherTransform.destroy();
+        };
+        abortSignal.addEventListener("abort", onAbort, { once: true });
+        transformedStream.on("close", () => {
+          abortSignal.removeEventListener("abort", onAbort);
+        });
+      }
+    }
+
     const webStream = (Readable.toWeb as any)(transformedStream) as ReadableStream;
 
     return {
