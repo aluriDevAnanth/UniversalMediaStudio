@@ -6,9 +6,12 @@ import { db } from "./db";
 import { importVideoFile, cancelActiveImport } from "./random_video";
 import { BundleManager } from "./bundle_manager";
 
-// Suppress Windows GPU disk cache lock errors when running multiple dev instances
+// Hardware Video Acceleration & GPU Rasterization Switches
 app.commandLine.appendSwitch("disable-gpu-shader-disk-cache");
-app.commandLine.appendSwitch("disable-http-cache");
+app.commandLine.appendSwitch("enable-gpu-rasterization");
+app.commandLine.appendSwitch("enable-zero-copy");
+app.commandLine.appendSwitch("ignore-gpu-blocklist");
+app.commandLine.appendSwitch("enable-hardware-overlays");
 
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {

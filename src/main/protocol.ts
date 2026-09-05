@@ -11,15 +11,8 @@ export function registerAdaumcProtocol(): void {
       const videoId = url.hostname;
       let assetKey = url.pathname.replace(/^\//, "") || "video";
 
-      console.log(
-        `[adaumc:// protocol request] videoId: '${videoId}', assetKey: '${assetKey}'`,
-      );
-
       const videoRecord = db.getVideo(videoId);
       if (!videoRecord || !videoRecord.bundlePath) {
-        console.warn(
-          `[adaumc:// protocol warn] Video record not found for videoId '${videoId}'`,
-        );
         return new Response("Video bundle not found", { status: 404 });
       }
 

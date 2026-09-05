@@ -257,6 +257,29 @@ export default function App(): React.JSX.Element {
       onDrop={handleDrop}
       className="bg-background text-foreground relative flex h-screen w-screen flex-col overflow-hidden transition-colors duration-200"
     >
+      {/* Ambient Glassmorphic Glow Mesh Canvas */}
+      <div
+        style={{ contain: "strict", transform: "translate3d(0, 0, 0)" }}
+        className="pointer-events-none absolute inset-0 overflow-hidden opacity-75 dark:opacity-45 transition-opacity duration-500"
+      >
+        <div
+          style={{ transform: "translateZ(0)" }}
+          className="bg-gradient-to-br from-blue-500/30 to-indigo-600/30 absolute -top-[10%] -left-[10%] h-[550px] w-[550px] rounded-full blur-[100px]"
+        />
+        <div
+          style={{ transform: "translateZ(0)" }}
+          className="bg-gradient-to-tr from-cyan-400/25 to-sky-500/25 absolute top-[25%] -right-[12%] h-[600px] w-[600px] rounded-full blur-[110px]"
+        />
+        <div
+          style={{ transform: "translateZ(0)" }}
+          className="bg-gradient-to-tl from-purple-500/25 to-pink-500/20 absolute -bottom-[15%] left-[20%] h-[500px] w-[500px] rounded-full blur-[100px]"
+        />
+        <div
+          style={{ transform: "translateZ(0)" }}
+          className="bg-gradient-to-r from-emerald-400/15 to-teal-500/15 absolute top-[50%] left-[35%] h-[400px] w-[400px] rounded-full blur-[90px]"
+        />
+      </div>
+
       {/* Top Header Navigation */}
       <Header />
 
