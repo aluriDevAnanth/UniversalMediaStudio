@@ -143,7 +143,9 @@ export class ImportSemaphore {
   }
 }
 
-export const GLOBAL_FFMPEG_SEMAPHORE = new ImportSemaphore(require("os").cpus().length || 4);
+export const GLOBAL_FFMPEG_SEMAPHORE = new ImportSemaphore(
+  Math.min(4, Math.max(2, require("os").cpus().length || 4)),
+);
 
 export class FFmpegProcessor {
   private static gpuCheckCache: string | null = null;
@@ -358,7 +360,7 @@ export class FFmpegProcessor {
       cmd = `${ffmpegCmd} -y -nostdin -i "${inputVideo}" -c:v copy -c:a aac -b:a 192k -movflags +faststart "${outputMp4}"`;
     } else {
       isTranscoded = true;
-      cmd = `${ffmpegCmd} -y -nostdin -i "${inputVideo}" -c:v libx264 -preset veryfast -crf 22 -c:a aac -b:a 192k -movflags +faststart "${outputMp4}"`;
+      cmd = `${ffmpegCmd} -y -nostdin -i "${inputVideo}" -c:v libx264 -preset veryfast -crf 22 -g 30 -keyint_min 30 -sc_threshold 0 -c:a aac -b:a 192k -movflags +faststart "${outputMp4}"`;
     }
 
     logs.push(
@@ -592,7 +594,7 @@ export class FFmpegProcessor {
     }
 
     const segFiles: string[] = [];
-    const concurrencyLimit = (require("os").cpus().length || 4) * 2;
+    const concurrencyLimit = Math.min(3, Math.max(2, Math.floor((require("os").cpus().length || 4) / 2)));
     let completedClips = 0;
     const clipTasks = percentageOffsets.map((offset, i) => {
       return async () => {
@@ -729,7 +731,7 @@ export class FFmpegProcessor {
       const cpuCount = require("os").cpus().length || 4;
       if (mins < 30) return 1;
       const needed = Math.max(2, Math.floor(mins / 30));
-      const maxCap = Math.min(8, cpuCount);
+      const maxCap = Math.min(4, cpuCount);
       return Math.min(maxCap, needed);
     };
     const num_threads = getOptimalThreadCount(durationMins);
@@ -813,7 +815,7 @@ export class FFmpegProcessor {
     inputVideo: string,
     outputDir: string,
     durationSec: number,
-    codec = "unknown",
+    _codec = "unknown",
     onTileProgress?: (progress: SpriteProgressUpdate) => void,
     isCancelled?: () => boolean,
   ): Promise<{ vttPath: string; spritePaths: string[]; logs: string[] }> {
@@ -848,13 +850,10 @@ export class FFmpegProcessor {
       const cpuCount = require("os").cpus().length || 4;
       if (mins < 30) return 1;
       const needed = Math.max(2, Math.floor(mins / 30));
-      const maxCap = Math.min(8, cpuCount);
+      const maxCap = Math.min(4, cpuCount);
       return Math.min(maxCap, needed);
     };
     const num_threads = getOptimalThreadCount(durationMins);
-
-    const gpuSupport = await FFmpegProcessor.detectGPUSupport();
-    const isHw = gpuSupport === "nvidia" && (codec === "hevc" || codec === "h264");
 
     logs.push(
       makeLog({
@@ -871,8 +870,6 @@ export class FFmpegProcessor {
           capacityPerSheet,
           tileW,
           tileH,
-          gpuSupport,
-          isHw,
         },
       }),
     );
@@ -883,7 +880,7 @@ export class FFmpegProcessor {
       fs.mkdirSync(tempTilesDir, { recursive: true });
     }
 
-    const concurrencyLimit = (require("os").cpus().length || 4) * 2;
+    const concurrencyLimit = Math.min(3, Math.max(2, Math.floor((require("os").cpus().length || 4) / 2)));
     const chunkProgress = new Array<number>(num_threads).fill(0);
     const spriteStartTime = Date.now();
 
@@ -915,12 +912,8 @@ export class FFmpegProcessor {
         const chunkDurationActual = Math.max(0.1, cEnd - cStart);
         const outPattern = path.join(tempTilesDir, `chunk_${cIdx}_sprite_%d.jpg`);
 
-        const hwCodec = isHw ? `-c:v ${codec}_cuvid -resize ${tileW}x${tileH}` : "";
-        const filterGraph = isHw
-          ? `fps=1/${interval.toFixed(4)},tile=${gridDim}x${gridDim}`
-          : `fps=1/${interval.toFixed(4)},scale=${tileW}:${tileH},tile=${gridDim}x${gridDim}`;
-
-        const cmd = `${ffmpegCmd} -y -threads 2 ${hwCodec} -skip_frame nokey -nostdin -progress pipe:1 -ss ${cStart.toFixed(2)} -t ${chunkDurationActual.toFixed(2)} -i "${inputVideo}" -vf "${filterGraph}" -q:v 3 "${outPattern}"`;
+        const filterGraph = `fps=1/${interval.toFixed(4)},scale=${tileW}:${tileH},tile=${gridDim}x${gridDim}`;
+        const cmd = `${ffmpegCmd} -y -threads 2 -skip_frame nokey -nostdin -progress pipe:1 -ss ${cStart.toFixed(2)} -t ${chunkDurationActual.toFixed(2)} -i "${inputVideo}" -vf "${filterGraph}" -q:v 3 "${outPattern}"`;
 
         const chunkT0 = Date.now();
         logs.push(
@@ -932,7 +925,7 @@ export class FFmpegProcessor {
             totalUnits: num_threads,
             unitName: `chunk_${cIdx + 1}`,
             msg: `${cStart.toFixed(1)}s–${cEnd.toFixed(1)}s`,
-            details: { cStart, cEnd, chunkDurationActual, filterGraph, isHw },
+            details: { cStart, cEnd, chunkDurationActual, filterGraph },
           }),
         );
 

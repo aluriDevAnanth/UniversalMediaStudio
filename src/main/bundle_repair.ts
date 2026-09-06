@@ -86,7 +86,7 @@ export class BundleRepairManager {
 
       // 3. Extract all other assets (thumbnails, gifs, vtt, sprites, etc.)
       const extractedAssets: { key: string; filePath: string; mimeType: string }[] = [];
-      for (const [key, asset] of Object.entries(metadata.assets)) {
+      for (const key of Object.keys(metadata.assets)) {
         if (key === "video") continue;
         const assetSlice = BundleManager.readAssetSlice(bundlePath, key);
         const ext = key === "thumbnail" ? ".jpg" : key === "gif" ? ".gif" : key === "vtt" ? ".vtt" : ".bin";

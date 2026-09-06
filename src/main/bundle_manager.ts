@@ -459,6 +459,24 @@ export class BundleManager {
     return { assetKey, metadata };
   }
 
+  public static getOptimalBufferSize(metadata: AdaumcMetadata, assetKey: string): number {
+    if (assetKey !== "video") return 1024 * 1024; // 1MB for static assets
+    const asset = metadata.assets?.[assetKey];
+    const totalSize = asset?.length || asset?.size || 0;
+    const duration = metadata.duration || 0;
+    const estBitrate = duration > 0 ? (totalSize * 8) / duration : 0;
+    const res = (metadata.resolution || "").toLowerCase();
+    const is4K = res.includes("4k") || res.includes("2160") || res.includes("3840");
+
+    if (is4K || estBitrate > 15_000_000 || totalSize > 1024 * 1024 * 1024) {
+      return 8 * 1024 * 1024; // 8MB buffer for 4K / high-bitrate
+    }
+    if (estBitrate > 3_000_000 || totalSize > 250 * 1024 * 1024 || res.includes("1080")) {
+      return 4 * 1024 * 1024; // 4MB buffer for 1080p
+    }
+    return 1024 * 1024; // 1MB buffer for standard quality
+  }
+
   /**
    * Creates a Web ReadableStream for Range Streaming using Node.js asynchronous libuv threadpool (non-blocking)
    */
@@ -500,11 +518,16 @@ export class BundleManager {
       end = totalSize - 1;
     }
 
-    // Asynchronous file stream using highWaterMark buffer for smooth 1080p/4K playback
+    const optimalBuffer = Math.max(
+      this.getOptimalBufferSize(metadata, assetKey),
+      maxChunkSize || 0,
+    );
+
+    // Asynchronous file stream using dynamic highWaterMark buffer for smooth 1080p/4K playback
     const fileStream = fs.createReadStream(bundlePath, {
       start: assetStartInFile + start,
       end: assetStartInFile + end,
-      highWaterMark: 1024 * 1024, // 1MB buffer
+      highWaterMark: optimalBuffer,
     });
 
     const cipherTransform = new CipherTransform(asset.offset + start);
