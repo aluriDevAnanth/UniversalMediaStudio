@@ -12,43 +12,12 @@ import { AnalyticsView } from "./components/AnalyticsView";
 import { BundleExplorerModal } from "./components/BundleExplorerModal";
 import { TagManagerDialog } from "./components/TagManagerDialog";
 import { ShortcutsModal } from "./components/ShortcutsModal";
-import { ToastContainer } from "./components/ToastNotification";
+import { ToastContainer, showToast } from "./components/ToastNotification";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { VideoRecord } from "./env";
 import { Upload } from "lucide-react";
 
-const getDraggedFileType = (
-  e: React.DragEvent,
-): "video" | "subtitle" | "unknown" => {
-  const videoMimeTypes = [
-    "video/mp4",
-    "video/x-matroska",
-    "video/avi",
-    "video/x-msvideo",
-    "video/webm",
-    "video/quicktime",
-    "video/x-m4v",
-  ];
 
-  const subtitleMimeTypes = ["application/x-subrip", "text/plain"];
-
-  if (e.dataTransfer?.items?.length > 0) {
-    const items = Array.from(e.dataTransfer.items);
-
-    for (const item of items) {
-      if (item.kind === "file") {
-        const mimeType = item.type.toLowerCase();
-
-        if (videoMimeTypes.includes(mimeType)) return "video";
-        if (subtitleMimeTypes.includes(mimeType)) return "subtitle";
-
-        if (mimeType.startsWith("video/")) return "video";
-      }
-    }
-  }
-
-  return "unknown";
-};
 
 export default function App(): React.JSX.Element {
   const {
@@ -139,6 +108,26 @@ export default function App(): React.JSX.Element {
       window.removeEventListener("inspect-video-bundle", handleInspectBundle);
   }, []);
 
+  // Window-level dragover/drop prevention so files can be dropped anywhere on the window
+  useEffect(() => {
+    const onWindowDragOver = (e: DragEvent) => {
+      e.preventDefault();
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = "copy";
+      }
+    };
+    const onWindowDrop = (e: DragEvent) => {
+      e.preventDefault();
+    };
+
+    window.addEventListener("dragover", onWindowDragOver);
+    window.addEventListener("drop", onWindowDrop);
+    return () => {
+      window.removeEventListener("dragover", onWindowDragOver);
+      window.removeEventListener("drop", onWindowDrop);
+    };
+  }, []);
+
   if (!isAuthenticated) {
     return <LoginScreen />;
   }
@@ -146,14 +135,6 @@ export default function App(): React.JSX.Element {
   // Handle Drag & Drop without blinking using counter ref
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
-
-    const type = getDraggedFileType(e);
-
-    if (type === "subtitle") {
-      dragCounterRef.current = 0;
-      setIsDraggingOver(false);
-      return;
-    }
     if (
       e.dataTransfer.types &&
       Array.from(e.dataTransfer.types).includes("Files")
@@ -184,69 +165,100 @@ export default function App(): React.JSX.Element {
 
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     dragCounterRef.current = 0;
     setIsDraggingOver(false);
 
+    let rawFiles: File[] = [];
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const files = Array.from(e.dataTransfer.files);
-      const videoExtensions = [
-        "mp4",
-        "mkv",
-        "avi",
-        "webm",
-        "mov",
-        "m4v",
-        "adaumc",
-      ];
-
-      const validFiles: File[] = [];
-      const invalidFiles: File[] = [];
-
-      for (const file of files) {
-        const ext = file.name.split(".").pop()?.toLowerCase();
-        if (ext && videoExtensions.includes(ext)) {
-          validFiles.push(file);
-        } else {
-          invalidFiles.push(file);
+      rawFiles = Array.from(e.dataTransfer.files);
+    } else if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      for (const item of Array.from(e.dataTransfer.items)) {
+        if (item.kind === "file") {
+          const file = item.getAsFile();
+          if (file) rawFiles.push(file);
         }
       }
-
-      if (invalidFiles.length > 0 && validFiles.length > 0) {
-        const list = invalidFiles.map((f) => `- ${f.name}`).join("\n");
-        alert(
-          `Skipped the following unsupported files:\n${list}\n\nOnly video files (mp4, mkv, avi, webm, mov, m4v) and .adaumc containers are supported.`,
-        );
-      }
-
-      if (validFiles.length === 0) return;
-
-      const promises = validFiles.map(async (file) => {
-        const filePath = (file as any).path;
-        if (filePath) {
-          const tempTaskId = `vid_temp_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-          updateActiveImport({
-            taskId: tempTaskId,
-            fileName: file.name,
-            step: 1,
-            totalSteps: 4,
-            percent: 1,
-            log: "Initializing import...",
-            etaSeconds: null,
-          });
-          try {
-            await window.api.videos.importFilePath(filePath, tempTaskId);
-          } catch (err) {
-            console.error("Drag & Drop import error:", err);
-          } finally {
-            removeActiveImport(tempTaskId);
-          }
-        }
-      });
-
-      Promise.all(promises).then(() => {
-        fetchData();
-      });
     }
+
+    if (rawFiles.length === 0) return;
+
+    const videoExtensions = [
+      "mp4",
+      "mkv",
+      "avi",
+      "webm",
+      "mov",
+      "m4v",
+      "adaumc",
+    ];
+
+    const validFiles: File[] = [];
+    const invalidFiles: File[] = [];
+
+    for (const file of rawFiles) {
+      const ext = file.name.split(".").pop()?.toLowerCase();
+      if (ext && videoExtensions.includes(ext)) {
+        validFiles.push(file);
+      } else {
+        invalidFiles.push(file);
+      }
+    }
+
+    if (invalidFiles.length > 0 && validFiles.length === 0) {
+      const list = invalidFiles.map((f) => f.name).join(", ");
+      showToast(
+        "Unsupported Format",
+        `Skipped: ${list}. Supported formats: MP4, MKV, AVI, WEBM, MOV, M4V, ADAUMC.`,
+        "error",
+      );
+      return;
+    }
+
+    if (validFiles.length === 0) return;
+
+    showToast(
+      "Import Started",
+      `Importing ${validFiles.length} video file${validFiles.length > 1 ? "s" : ""}...`,
+      "info",
+    );
+
+    const promises = validFiles.map(async (file) => {
+      const filePath =
+        window.api?.webUtils?.getPathForFile?.(file) ||
+        (file as any).path ||
+        "";
+      if (filePath) {
+        const tempTaskId = `vid_temp_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+        updateActiveImport({
+          taskId: tempTaskId,
+          fileName: file.name,
+          step: 1,
+          totalSteps: 4,
+          percent: 1,
+          log: "Initializing import...",
+          etaSeconds: null,
+        });
+        try {
+          await window.api.videos.importFilePath(filePath, tempTaskId);
+        } catch (err: any) {
+          console.error("Drag & Drop import error:", err);
+          showToast(
+            "Import Error",
+            err?.message || "Failed to process dropped video.",
+            "error",
+          );
+        } finally {
+          removeActiveImport(tempTaskId);
+        }
+      } else {
+        console.warn("Could not determine native file path for:", file.name);
+      }
+    });
+
+    Promise.all(promises).then(() => {
+      fetchData();
+    });
   };
 
   return (

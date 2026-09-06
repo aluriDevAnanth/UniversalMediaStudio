@@ -25,6 +25,7 @@ import { VideoRecord } from "../env";
 import { useVideoStore } from "../store/videoStore";
 import { TagDropdown } from "./TagDropdown";
 import { showToast } from "./ToastNotification";
+import { BufferHealthMonitor, BufferHealthStats } from "../utils/bufferMonitor";
 
 interface VideoPlayerModalProps {
   video: VideoRecord;
@@ -113,6 +114,15 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   const [isPlayerDragHovered, setIsPlayerDragHovered] = useState(false);
   const { videos, updateVideoTags, setShortcutsOpen } = useVideoStore();
   const playerRef = useRef<MediaPlayerInstance>(null);
+  const bufferMonitorRef = useRef<BufferHealthMonitor>(new BufferHealthMonitor());
+  const [bufferStats, setBufferStats] = useState<BufferHealthStats>({
+    bufferAheadSec: 0,
+    bufferPercent: 0,
+    health: "good",
+    estimatedMbps: 20,
+    stalls: 0,
+    totalStallDurationMs: 0,
+  });
 
   const currentVideo = videos.find((v) => v.id === video.id) || video;
 
@@ -121,6 +131,40 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   const [subtitles, setSubtitles] = useState<
     Array<{ key: string; label: string; lang: string }>
   >([]);
+
+  const handleSeekPrefetch = (targetTimeSec: number) => {
+    if (!currentVideo.duration || currentVideo.duration <= 0) return;
+    const fraction = Math.max(0, Math.min(1, targetTimeSec / currentVideo.duration));
+    const estTotalSize = ((currentVideo as any).sizeBytes || (currentVideo as any).size || 100 * 1024 * 1024);
+    const estStartByte = Math.floor(fraction * estTotalSize);
+    const estEndByte = Math.min(estTotalSize - 1, estStartByte + 8 * 1024 * 1024);
+
+    fetch(`adaumc://${currentVideo.id}/video`, {
+      headers: { Range: `bytes=${estStartByte}-${estEndByte}` },
+    }).catch(() => {});
+  };
+
+  // Attach Buffer Monitor & Pre-warm Stream Cache
+  useEffect(() => {
+    const videoStreamUrl = `adaumc://${currentVideo.id}/video`;
+    // Pre-warm the initial byte range & decoder headers in Chromium media cache
+    fetch(videoStreamUrl, {
+      headers: { Range: "bytes=0-2097151" }, // Fetch first 2MB
+    }).catch(() => {});
+
+    fetch(videoStreamUrl, {
+      headers: { Range: "bytes=0-4096" }, // Pre-connect warmup
+    }).catch(() => {});
+
+    const interval = setInterval(() => {
+      setBufferStats(bufferMonitorRef.current.getStats());
+    }, 1000);
+
+    return () => {
+      clearInterval(interval);
+      bufferMonitorRef.current.detach();
+    };
+  }, [currentVideo.id]);
 
   const loadSubtitles = () => {
     if (currentVideo.bundlePath) {
@@ -210,7 +254,10 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
       const file = e.dataTransfer.files[0];
       const ext = file.name.split(".").pop()?.toLowerCase();
       if (ext && ["vtt", "srt", "ass", "sub"].includes(ext)) {
-        const filePath = (file as any).path;
+        const filePath =
+          window.api?.webUtils?.getPathForFile?.(file) ||
+          (file as any).path ||
+          "";
         if (filePath) {
           await handleAddSubtitle(filePath);
         }
@@ -604,6 +651,23 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
             src={videoStreamUrl}
             className="h-full w-full"
             autoPlay
+            preload="auto"
+            load="eager"
+            playsInline
+            onSeeked={(time) => {
+              if (typeof time === "number") {
+                handleSeekPrefetch(time);
+              }
+            }}
+            onLoadedData={() => {
+              const player = playerRef.current;
+              if (player) {
+                const mediaEl = (player as any).el?.querySelector("video") || (player as any).media;
+                if (mediaEl) {
+                  bufferMonitorRef.current.attach(mediaEl);
+                }
+              }
+            }}
           >
             <MediaProvider>
               <Track
@@ -703,7 +767,31 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
                   <Terminal className="h-4 w-4 text-amber-500" />
                   .adaumc Container Diagnostic Telemetry Logs
                 </span>
-                <span className="text-[11px]">ID: {currentVideo.id}</span>
+                <div className="flex items-center gap-3 text-[11px]">
+                  <span className="text-muted">
+                    Buffer:{" "}
+                    <strong
+                      className={
+                        bufferStats.health === "excellent" || bufferStats.health === "good"
+                          ? "text-emerald-400"
+                          : bufferStats.health === "fair"
+                            ? "text-amber-400"
+                            : "text-red-400"
+                      }
+                    >
+                      {bufferStats.bufferAheadSec}s ({bufferStats.health.toUpperCase()})
+                    </strong>
+                  </span>
+                  <span className="text-muted">
+                    Bandwidth: <strong className="text-cyan-400">{bufferStats.estimatedMbps} Mbps</strong>
+                  </span>
+                  {bufferStats.stalls > 0 && (
+                    <span className="text-red-400">
+                      Stalls: <strong>{bufferStats.stalls}</strong>
+                    </span>
+                  )}
+                  <span className="text-muted">ID: {currentVideo.id}</span>
+                </div>
               </div>
               {loadingLogs ? (
                 <p className="text-muted">Loading telemetry logs...</p>
