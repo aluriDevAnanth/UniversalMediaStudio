@@ -2,16 +2,15 @@ import { app, BrowserWindow, ipcMain, shell, dialog, protocol } from "electron";
 import fs from "fs";
 import path from "path";
 import { registerAdaumcProtocol } from "./protocol";
+import { registerRecommendationApi } from "./recommendationApi";
 import { db } from "./db";
 import { importVideoFile, cancelActiveImport } from "./random_video";
 import { BundleManager } from "./bundle_manager";
 
-// Hardware Video Acceleration & GPU Rasterization Switches
-app.commandLine.appendSwitch("disable-gpu-shader-disk-cache");
-app.commandLine.appendSwitch("enable-gpu-rasterization");
-app.commandLine.appendSwitch("enable-zero-copy");
-app.commandLine.appendSwitch("ignore-gpu-blocklist");
-app.commandLine.appendSwitch("enable-hardware-overlays");
+// Stable Chromium GPU Switches
+app.commandLine.appendSwitch("enable-features", "HardwareMediaKeyHandling,MediaFoundationRender");
+app.commandLine.appendSwitch("disable-features", "UseModernMediaControls,CdmStorageDatabase");
+
 
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
@@ -82,6 +81,8 @@ function createWindow(): void {
 app.whenReady().then(() => {
   // Register adaumc:// custom protocol handler
   registerAdaumcProtocol();
+  // Register recommendation API
+  registerRecommendationApi();
 
   // Setup IPC Handlers
   ipcMain.handle("auth:isSet", () => db.isPasswordSet());

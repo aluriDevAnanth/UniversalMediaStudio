@@ -1,7 +1,17 @@
 import path from "path";
 import fs from "fs";
-import { app } from "electron";
 import { FFmpegProcessor, SpriteProgressUpdate, makeLog } from "./ffmpeg_worker";
+
+function getUserDataDir(): string {
+  try {
+    const electron = require("electron");
+    const app = electron?.app || electron?.default?.app;
+    if (app && typeof app.getPath === "function") {
+      return app.getPath("userData");
+    }
+  } catch {}
+  return path.join(require("os").homedir(), ".universal_media_studio");
+}
 import { BundleManager } from "./bundle_manager";
 import { db, VideoRecord } from "./db";
 import { ConcurrentPacker } from "./concurrent_packer";
@@ -20,10 +30,64 @@ export interface ProgressUpdate {
 
 export type ImportProgress = ProgressUpdate;
 
+export class VideoImportQueue {
+  private activeCount = 0;
+  private maxConcurrency: number;
+  private queue: Array<{
+    taskId: string;
+    resolve: () => void;
+    reject: (err: any) => void;
+  }> = [];
+
+  constructor(maxConcurrency = 2) {
+    this.maxConcurrency = maxConcurrency;
+  }
+
+  public getQueuePosition(taskId: string): number {
+    const idx = this.queue.findIndex((item) => item.taskId === taskId);
+    return idx >= 0 ? idx + 1 : 0;
+  }
+
+  public async acquire(taskId: string, onWait?: (pos: number) => void): Promise<void> {
+    if (this.activeCount < this.maxConcurrency) {
+      this.activeCount++;
+      return;
+    }
+    return new Promise<void>((resolve, reject) => {
+      this.queue.push({ taskId, resolve, reject });
+      if (onWait) {
+        onWait(this.queue.length);
+      }
+    });
+  }
+
+  public release(): void {
+    if (this.queue.length > 0) {
+      const next = this.queue.shift();
+      if (next) {
+        next.resolve();
+      }
+    } else {
+      this.activeCount = Math.max(0, this.activeCount - 1);
+    }
+  }
+
+  public cancel(taskId: string): void {
+    const idx = this.queue.findIndex((item) => item.taskId === taskId);
+    if (idx !== -1) {
+      const [removed] = this.queue.splice(idx, 1);
+      removed.reject(new Error("Import cancelled while in queue"));
+    }
+  }
+}
+
+export const GLOBAL_VIDEO_IMPORT_QUEUE = new VideoImportQueue(2);
+
 export const activeImportTasks = new Map<string, { videoId: string; isCancelled: boolean }>();
 
 export function cancelActiveImport(taskId?: string): void {
   if (taskId) {
+    GLOBAL_VIDEO_IMPORT_QUEUE.cancel(taskId);
     const task = activeImportTasks.get(taskId);
     if (task) {
       task.isCancelled = true;
@@ -32,6 +96,7 @@ export function cancelActiveImport(taskId?: string): void {
     }
   } else {
     for (const [id, task] of activeImportTasks.entries()) {
+      GLOBAL_VIDEO_IMPORT_QUEUE.cancel(id);
       task.isCancelled = true;
       FFmpegProcessor.killActiveChildProcesses(id);
       console.log(`[Import] Cancelled active import task and killed processes for taskId: ${id}`);
@@ -118,9 +183,16 @@ export async function importVideoFile(
 
   broadcastProgress(0, 0, "Initializing import...");
 
+  let acquiredQueueSlot = false;
   let bundlePath = "";
 
   try {
+    // Acquire slot in the global import queue (max 2 videos processed simultaneously)
+    await GLOBAL_VIDEO_IMPORT_QUEUE.acquire(videoId, (pos) => {
+      broadcastProgress(0, 0, `Queued for processing (waiting in queue: position ${pos})...`);
+    });
+    acquiredQueueSlot = true;
+
     if (activeImportTasks.get(videoId)?.isCancelled) {
       activeImportTasks.delete(videoId);
       activeImportFilePaths.delete(normPath);
@@ -168,7 +240,7 @@ export async function importVideoFile(
     if (selectedPath.endsWith(".adaumc")) {
       broadcastProgress(1, 50, `Importing pre-built .adaumc container file...`);
 
-      const bundlesDir = path.join(app.getPath("userData"), "bundles");
+      const bundlesDir = path.join(getUserDataDir(), "bundles");
       if (!fs.existsSync(bundlesDir)) {
         fs.mkdirSync(bundlesDir, { recursive: true });
       }
@@ -200,10 +272,10 @@ export async function importVideoFile(
     }
 
     // Prepare temp output directory
-    const tempDir = path.join(app.getPath("userData"), `temp_${videoId}`);
+    const tempDir = path.join(getUserDataDir(), `temp_${videoId}`);
     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
 
-    const bundlesDir = path.join(app.getPath("userData"), "bundles");
+    const bundlesDir = path.join(getUserDataDir(), "bundles");
     if (!fs.existsSync(bundlesDir)) fs.mkdirSync(bundlesDir, { recursive: true });
 
     const tempThumbPath = path.join(tempDir, "thumbnail.jpg");
@@ -519,13 +591,27 @@ export async function importVideoFile(
     activeImportFilePaths.delete(normPath);
     activeImportFilePaths.delete(fileKey);
     try {
-      const tempDir = path.join(app.getPath("userData"), `temp_${videoId}`);
+      const tempDir = path.join(getUserDataDir(), `temp_${videoId}`);
       if (fs.existsSync(tempDir)) {
         fs.rmSync(tempDir, { recursive: true, force: true });
       }
     } catch (e) {}
 
+    if (
+      error?.message === "Import cancelled" ||
+      error?.message?.includes("cancelled while in queue")
+    ) {
+      console.log(`[Import] Task ${videoId} cancelled.`);
+      return null;
+    }
+
     console.error(`[Import Error] Video processing failed for ${videoId}:`, error);
     throw error;
+  } finally {
+    if (acquiredQueueSlot) {
+      GLOBAL_VIDEO_IMPORT_QUEUE.release();
+      acquiredQueueSlot = false;
+    }
   }
 }
+
