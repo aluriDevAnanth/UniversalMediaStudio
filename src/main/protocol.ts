@@ -1,5 +1,6 @@
 import { BundleManager } from "./bundle_manager";
 import { db } from "./db";
+import { CacheManager } from "./cache_manager";
 
 let electronProtocol: any = null;
 try {
@@ -111,14 +112,32 @@ export function registerAdaumcProtocol(): void {
         const startByte = parsedRange ? parsedRange.start : 0;
         const endByte = parsedRange ? parsedRange.end : totalSize - 1;
 
+        const isSeek = startByte > 0;
+        const seekBufferSize = isSeek ? 8 * 1024 * 1024 : undefined;
+
         const streamResult = BundleManager.createAssetStream(
           videoRecord.bundlePath,
           assetKey,
           startByte,
           endByte,
-          undefined, // Stream full range on demand with backpressure
+          seekBufferSize,
           request.signal,
         );
+
+        // Prefetch subsequent segment in background (next 16MB)
+        const nextSegmentStart = endByte + 1;
+        const nextSegmentEnd = Math.min(totalSize - 1, nextSegmentStart + 16 * 1024 * 1024);
+        if (nextSegmentStart < totalSize) {
+          const { payloadStartOffset } = BundleManager.readMetadata(videoRecord.bundlePath);
+          CacheManager.getInstance().prefetchSegment(
+            videoRecord.bundlePath,
+            assetKey,
+            nextSegmentStart,
+            nextSegmentEnd,
+            payloadStartOffset,
+            asset.offset,
+          );
+        }
 
         const contentLength = (
           streamResult.end -
@@ -134,7 +153,8 @@ export function registerAdaumcProtocol(): void {
               "Content-Range": `bytes ${streamResult.start}-${streamResult.end}/${streamResult.totalSize}`,
               "Accept-Ranges": "bytes",
               "Content-Length": contentLength,
-              "Cache-Control": "no-cache",
+              "Cache-Control": "public, max-age=31536000, immutable",
+              "Link": `<adaumc://${videoId}/video>; rel=preconnect`,
             },
           });
         } else {
@@ -144,7 +164,8 @@ export function registerAdaumcProtocol(): void {
               "Content-Type": streamResult.mimeType || "video/mp4",
               "Content-Length": streamResult.totalSize.toString(),
               "Accept-Ranges": "bytes",
-              "Cache-Control": "no-cache",
+              "Cache-Control": "public, max-age=31536000, immutable",
+              "Link": `<adaumc://${videoId}/video>; rel=preconnect`,
             },
           });
         }
