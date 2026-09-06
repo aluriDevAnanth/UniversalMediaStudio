@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, webUtils } from "electron";
 
 const api = {
   auth: {
@@ -97,6 +97,28 @@ const api = {
       ipcRenderer.invoke("bundle:removeSubtitle", bundlePath, assetKey),
     optimize: (bundlePath: string) =>
       ipcRenderer.invoke("bundle:optimize", bundlePath),
+  },
+  recommendations: {
+    get: (params?: { videoId?: string; limit?: number }) =>
+      ipcRenderer.invoke("recommendations:get", params),
+    trending: (params?: { limit?: number }) =>
+      ipcRenderer.invoke("recommendations:trending", params),
+    becauseYouWatched: (params: { videoId: string; limit?: number }) =>
+      ipcRenderer.invoke("recommendations:becauseYouWatched", params),
+    byTags: (params: { tags: string[]; limit?: number }) =>
+      ipcRenderer.invoke("recommendations:byTags", params),
+  },
+  webUtils: {
+    getPathForFile: (file: File) => {
+      try {
+        if (webUtils && typeof webUtils.getPathForFile === "function") {
+          return webUtils.getPathForFile(file);
+        }
+      } catch (err) {
+        console.error("[Preload] webUtils.getPathForFile error:", err);
+      }
+      return (file as any).path || "";
+    },
   },
   windowControls: {
     minimize: () => ipcRenderer.send("window:minimize"),
