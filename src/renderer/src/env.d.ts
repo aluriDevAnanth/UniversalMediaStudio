@@ -126,6 +126,51 @@ export interface IElectronAPI {
       bundlePath: string,
     ) => Promise<{ success: boolean; bundlePath: string; wasOptimized: boolean; message: string; error?: string }>;
   };
+  recommendations: {
+    get: (params?: { videoId?: string; limit?: number }) => Promise<{
+      success: boolean;
+      recommendations?: Array<{
+        video: VideoRecord;
+        score: number;
+        reasons: string[];
+        source: string;
+      }>;
+      error?: string;
+    }>;
+    trending: (params?: { limit?: number }) => Promise<{
+      success: boolean;
+      recommendations?: Array<{
+        video: VideoRecord;
+        score: number;
+        reasons: string[];
+        source: string;
+      }>;
+      error?: string;
+    }>;
+    becauseYouWatched: (params: { videoId: string; limit?: number }) => Promise<{
+      success: boolean;
+      recommendations?: Array<{
+        video: VideoRecord;
+        score: number;
+        reasons: string[];
+        source: string;
+      }>;
+      error?: string;
+    }>;
+    byTags: (params: { tags: string[]; limit?: number }) => Promise<{
+      success: boolean;
+      recommendations?: Array<{
+        video: VideoRecord;
+        score: number;
+        reasons: string[];
+        source: string;
+      }>;
+      error?: string;
+    }>;
+  };
+  webUtils: {
+    getPathForFile: (file: File) => string;
+  };
   windowControls: {
     minimize: () => void;
     maximize: () => void;
