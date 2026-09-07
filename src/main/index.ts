@@ -1,6 +1,13 @@
 import { app, BrowserWindow, ipcMain, shell, dialog, protocol } from "electron";
 import fs from "fs";
 import path from "path";
+import { getPortableDataDir, getBundlesDir } from "./paths";
+
+// Configure 100% self-contained portable userData directory
+try {
+  app.setPath("userData", getPortableDataDir());
+} catch {}
+
 import { registerAdaumcProtocol } from "./protocol";
 import { registerRecommendationApi } from "./recommendationApi";
 import { db } from "./db";
@@ -96,8 +103,12 @@ app.whenReady().then(() => {
   ipcMain.handle("videos:getAll", () => db.getAllVideos());
 
   ipcMain.handle("videos:importFile", async (event) => {
+    const lastDir = db.getLastImportDirectory();
+    const defaultPath = lastDir && fs.existsSync(lastDir) ? lastDir : undefined;
+
     const result = await dialog.showOpenDialog({
       title: "Select Video or .adaumc Bundle File to Import",
+      defaultPath,
       properties: ["openFile", "multiSelections"],
       filters: [
         {
@@ -109,11 +120,25 @@ app.whenReady().then(() => {
 
     if (!result.canceled && result.filePaths.length > 0) {
       console.log(`[Import Started] Selecting ${result.filePaths.length} files`);
-      const promises = result.filePaths.map((selectedPath) => {
-        return importVideoFile(selectedPath, (progress) => {
-          event.sender.send("video:importProgress", progress);
-          event.sender.send("progress:update", progress);
-        });
+      try {
+        const chosenDir = path.dirname(result.filePaths[0]);
+        if (fs.existsSync(chosenDir)) {
+          db.setLastImportDirectory(chosenDir);
+        }
+      } catch {}
+
+      const baseTime = Date.now();
+      const promises = result.filePaths.map((selectedPath, index) => {
+        const itemCreatedAt = new Date(baseTime + index * 10).toISOString();
+        const taskId = `vid_${baseTime}_${index}_${Math.floor(Math.random() * 1000)}`;
+        return importVideoFile(
+          selectedPath,
+          (progress) => {
+            event.sender.send("video:importProgress", progress);
+          },
+          taskId,
+          itemCreatedAt,
+        );
       });
       // Run concurrently
       Promise.all(promises)
@@ -129,13 +154,23 @@ app.whenReady().then(() => {
     return null;
   });
 
-  ipcMain.handle("videos:importFilePath", async (event, filePath: string, taskId?: string) => {
+  ipcMain.handle("videos:importFilePath", async (event, filePath: string, taskId?: string, createdAt?: string) => {
     if (filePath) {
       console.log("[Import Path Started]", filePath, taskId);
-      return await importVideoFile(filePath, (progress) => {
-        event.sender.send("video:importProgress", progress);
-        event.sender.send("progress:update", progress);
-      }, taskId);
+      try {
+        const chosenDir = path.dirname(filePath);
+        if (fs.existsSync(chosenDir)) {
+          db.setLastImportDirectory(chosenDir);
+        }
+      } catch {}
+      return await importVideoFile(
+        filePath,
+        (progress) => {
+          event.sender.send("video:importProgress", progress);
+        },
+        taskId,
+        createdAt,
+      );
     }
     return null;
   });
@@ -192,7 +227,7 @@ app.whenReady().then(() => {
     try {
       let fullPath = bundlePath || "";
       if (!fullPath || !fs.existsSync(fullPath)) {
-        const bundlesDir = path.join(app.getPath("userData"), "bundles");
+        const bundlesDir = getBundlesDir();
         fullPath = path.join(bundlesDir, path.basename(bundlePath || ""));
       }
       console.log("[IPC bundle:inspect]", fullPath);
@@ -213,7 +248,7 @@ app.whenReady().then(() => {
       try {
         let fullPath = bundlePath || "";
         if (!fullPath || !fs.existsSync(fullPath)) {
-          const bundlesDir = path.join(app.getPath("userData"), "bundles");
+          const bundlesDir = getBundlesDir();
           fullPath = path.join(bundlesDir, path.basename(bundlePath || ""));
         }
 
@@ -257,7 +292,7 @@ app.whenReady().then(() => {
       try {
         let fullBundlePath = bundlePath || "";
         if (!fullBundlePath || !fs.existsSync(fullBundlePath)) {
-          const bundlesDir = path.join(app.getPath("userData"), "bundles");
+          const bundlesDir = getBundlesDir();
           fullBundlePath = path.join(
             bundlesDir,
             path.basename(bundlePath || ""),
@@ -266,8 +301,12 @@ app.whenReady().then(() => {
 
         let targetSubPath = subtitleFilePath;
         if (!targetSubPath) {
+          const lastDir = db.getLastImportDirectory();
+          const defaultPath = lastDir && fs.existsSync(lastDir) ? lastDir : undefined;
+
           const result = await dialog.showOpenDialog({
             title: "Select Subtitle File to Add into .adaumc Container",
+            defaultPath,
             properties: ["openFile"],
             filters: [
               {
@@ -280,6 +319,12 @@ app.whenReady().then(() => {
             return null;
           }
           targetSubPath = result.filePaths[0];
+          try {
+            const chosenDir = path.dirname(targetSubPath);
+            if (fs.existsSync(chosenDir)) {
+              db.setLastImportDirectory(chosenDir);
+            }
+          } catch {}
         }
 
         console.log(
@@ -308,7 +353,7 @@ app.whenReady().then(() => {
       try {
         let fullBundlePath = bundlePath || "";
         if (!fullBundlePath || !fs.existsSync(fullBundlePath)) {
-          const bundlesDir = path.join(app.getPath("userData"), "bundles");
+          const bundlesDir = getBundlesDir();
           fullBundlePath = path.join(
             bundlesDir,
             path.basename(bundlePath || ""),
@@ -338,7 +383,7 @@ app.whenReady().then(() => {
       const { BundleRepairManager } = require("./bundle_repair");
       let fullBundlePath = bundlePath || "";
       if (!fullBundlePath || !fs.existsSync(fullBundlePath)) {
-        const bundlesDir = path.join(app.getPath("userData"), "bundles");
+        const bundlesDir = getBundlesDir();
         fullBundlePath = path.join(
           bundlesDir,
           path.basename(bundlePath || ""),
