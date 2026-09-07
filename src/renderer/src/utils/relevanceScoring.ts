@@ -26,23 +26,34 @@ function getCategoryWeight(category: string): number {
   return CATEGORY_WEIGHTS[category] || 1.0;
 }
 
-/**
- * Computes Dice-Sørensen token overlap coefficient between two strings.
- */
-function computeTokenOverlap(str1: string, str2: string): number {
-  if (!str1 || !str2) return 0;
-  const clean1 = str1.toLowerCase().replace(/[^a-z0-9\s]/g, " ").trim();
-  const clean2 = str2.toLowerCase().replace(/[^a-z0-9\s]/g, " ").trim();
+function tokenize(str: string): Set<string> {
+  if (!str) return new Set();
+  const clean = str.toLowerCase().replace(/[^a-z0-9\s]/g, " ").trim();
+  if (!clean) return new Set();
+  const words = clean.split(/\s+/);
+  const result = new Set<string>();
+  for (let i = 0; i < words.length; i++) {
+    if (words[i].length > 2) {
+      result.add(words[i]);
+    }
+  }
+  return result;
+}
 
-  const tokens1 = new Set(clean1.split(/\s+/).filter((t) => t.length > 2));
-  const tokens2 = new Set(clean2.split(/\s+/).filter((t) => t.length > 2));
+/**
+ * Computes Dice-Sørensen token overlap coefficient between two strings or pre-tokenized sets.
+ */
+function computeTokenOverlap(str1: string, str2: string | Set<string>): number {
+  if (!str1 || !str2) return 0;
+  const tokens1 = tokenize(str1);
+  const tokens2 = str2 instanceof Set ? str2 : tokenize(str2);
 
   if (tokens1.size === 0 || tokens2.size === 0) return 0;
 
   let intersection = 0;
-  tokens1.forEach((t) => {
+  for (const t of tokens1) {
     if (tokens2.has(t)) intersection++;
-  });
+  }
 
   return (2 * intersection) / (tokens1.size + tokens2.size);
 }
@@ -52,41 +63,49 @@ function computeTokenOverlap(str1: string, str2: string): number {
  */
 function computeWeightedTagJaccard(
   videoTags: string[],
-  targetTags: string[],
+  targetTags: string[] | Set<string>,
 ): number {
-  if (!videoTags.length || !targetTags.length) return 0;
+  if (!videoTags.length) return 0;
+  const targetSet = targetTags instanceof Set ? targetTags : new Set(targetTags);
+  if (targetSet.size === 0) return 0;
 
-  const targetSet = new Set(targetTags);
   let intersectionWeight = 0;
   let unionWeight = 0;
 
-  const allUniqueTags = new Set([...videoTags, ...targetTags]);
-
-  allUniqueTags.forEach((t) => {
+  for (let i = 0; i < videoTags.length; i++) {
+    const t = videoTags[i];
     const { category } = parseTag(t);
     const weight = getCategoryWeight(category);
-    const inVideo = videoTags.includes(t);
-    const inTarget = targetSet.has(t);
-
-    if (inVideo && inTarget) {
+    unionWeight += weight;
+    if (targetSet.has(t)) {
       intersectionWeight += weight;
     }
-    if (inVideo || inTarget) {
-      unionWeight += weight;
+  }
+
+  for (const t of targetSet) {
+    if (!videoTags.includes(t)) {
+      const { category } = parseTag(t);
+      unionWeight += getCategoryWeight(category);
     }
-  });
+  }
 
   return unionWeight > 0 ? intersectionWeight / unionWeight : 0;
 }
 
-/**
- * Calculates a multidimensional relevance recommendation score for a single video.
- */
-export function calculateRelevanceScore(
-  video: VideoRecord,
-  context: RelevanceContext | PlaylistRecord[] = {},
-): number {
-  const normalizedContext: RelevanceContext = Array.isArray(context)
+interface CompiledContext {
+  searchQuery: string;
+  isTagQuery: boolean;
+  tagQuery: string;
+  queryTokens: Set<string>;
+  selectedTagsSet: Set<string>;
+  hasSelectedTags: boolean;
+  favoriteVideoIds: Set<string>;
+  watchLaterVideoIds: Set<string>;
+  highlyPlayed: VideoRecord[];
+}
+
+function compileContext(context: RelevanceContext | PlaylistRecord[] = {}): CompiledContext {
+  const normalized: RelevanceContext = Array.isArray(context)
     ? { playlists: context }
     : context;
 
@@ -95,59 +114,85 @@ export function calculateRelevanceScore(
     selectedTags = [],
     playlists = [],
     allVideos = [],
-  } = normalizedContext;
+  } = normalized;
 
+  const trimmedQuery = searchQuery.trim();
+  const isTagQuery = trimmedQuery.startsWith("#");
+  const tagQuery = isTagQuery ? trimmedQuery.slice(1).toLowerCase() : "";
+  const queryTokens = isTagQuery ? new Set<string>() : tokenize(trimmedQuery);
+
+  const selectedTagsSet = new Set(selectedTags);
+  const hasSelectedTags = selectedTagsSet.size > 0;
+
+  const favPlaylist = playlists.find((p) => p.id === "favourite");
+  const favoriteVideoIds = new Set(favPlaylist?.videoIds || []);
+
+  const watchLaterPlaylist = playlists.find((p) => p.id === "watch_later");
+  const watchLaterVideoIds = new Set(watchLaterPlaylist?.videoIds || []);
+
+  const highlyPlayed = allVideos.filter((v) => (v.playCount || 0) >= 2);
+
+  return {
+    searchQuery: trimmedQuery,
+    isTagQuery,
+    tagQuery,
+    queryTokens,
+    selectedTagsSet,
+    hasSelectedTags,
+    favoriteVideoIds,
+    watchLaterVideoIds,
+    highlyPlayed,
+  };
+}
+
+function calculateScoreWithCompiledContext(
+  video: VideoRecord,
+  ctx: CompiledContext,
+): number {
   let score = 1.0;
 
   // 1. Direct Search Term Match & Token Overlap
-  if (searchQuery.trim()) {
-    const query = searchQuery.trim();
-    if (query.startsWith("#")) {
-      const tagQuery = query.slice(1).toLowerCase();
-      const hasExactTag = video.tags.some((t) => t.toLowerCase() === tagQuery);
+  if (ctx.searchQuery) {
+    if (ctx.isTagQuery) {
+      const hasExactTag = video.tags.some((t) => t.toLowerCase() === ctx.tagQuery);
       if (hasExactTag) {
         score += 8.0;
       } else {
         const hasPartialTag = video.tags.some((t) =>
-          t.toLowerCase().includes(tagQuery),
+          t.toLowerCase().includes(ctx.tagQuery),
         );
         if (hasPartialTag) score += 4.0;
       }
     } else {
-      const titleOverlap = computeTokenOverlap(video.title, query);
+      const titleOverlap = computeTokenOverlap(video.title, ctx.queryTokens);
       score += titleOverlap * 6.0;
 
       const tagText = video.tags.map((t) => t.replace(":", " ")).join(" ");
-      const tagOverlap = computeTokenOverlap(tagText, query);
+      const tagOverlap = computeTokenOverlap(tagText, ctx.queryTokens);
       score += tagOverlap * 4.0;
     }
   }
 
   // 2. Selected Filter Tags Relevance
-  if (selectedTags.length > 0) {
-    const jaccard = computeWeightedTagJaccard(video.tags, selectedTags);
+  if (ctx.hasSelectedTags) {
+    const jaccard = computeWeightedTagJaccard(video.tags, ctx.selectedTagsSet);
     score += jaccard * 5.0;
   }
 
   // 3. User Historical Preference Affinity (Content-Based Collaborative Signal)
-  if (allVideos.length > 0) {
-    const highlyPlayed = allVideos.filter(
-      (v) => (v.playCount || 0) >= 2 && v.id !== video.id,
-    );
-
-    if (highlyPlayed.length > 0) {
-      let maxHistoryAffinity = 0;
-      for (const played of highlyPlayed) {
-        const tagSim = computeWeightedTagJaccard(video.tags, played.tags);
-        const titleSim = computeTokenOverlap(video.title, played.title);
-        const sim = tagSim * 0.7 + titleSim * 0.3;
-        if (sim > maxHistoryAffinity) {
-          maxHistoryAffinity = sim;
-        }
+  if (ctx.highlyPlayed.length > 0) {
+    let maxHistoryAffinity = 0;
+    for (let i = 0; i < ctx.highlyPlayed.length; i++) {
+      const played = ctx.highlyPlayed[i];
+      if (played.id === video.id) continue;
+      const tagSim = computeWeightedTagJaccard(video.tags, played.tags);
+      const titleSim = computeTokenOverlap(video.title, played.title);
+      const sim = tagSim * 0.7 + titleSim * 0.3;
+      if (sim > maxHistoryAffinity) {
+        maxHistoryAffinity = sim;
       }
-
-      score += maxHistoryAffinity * 2.5;
     }
+    score += maxHistoryAffinity * 2.5;
   }
 
   // 4. Logarithmic Play Count Boost (Implicit Feedback)
@@ -155,13 +200,11 @@ export function calculateRelevanceScore(
   score *= playBoost;
 
   // 5. Playlist Curation Boost
-  const favPlaylist = playlists.find((p) => p.id === "favourite");
-  if (favPlaylist && favPlaylist.videoIds.includes(video.id)) {
+  if (ctx.favoriteVideoIds.has(video.id)) {
     score *= 1.35; // +35% boost for user favorites
   }
 
-  const watchLaterPlaylist = playlists.find((p) => p.id === "watch_later");
-  if (watchLaterPlaylist && watchLaterPlaylist.videoIds.includes(video.id)) {
+  if (ctx.watchLaterVideoIds.has(video.id)) {
     score *= 1.25; // +25% boost for items in watch later
   }
 
@@ -179,15 +222,27 @@ export function calculateRelevanceScore(
 }
 
 /**
+ * Calculates a multidimensional relevance recommendation score for a single video.
+ */
+export function calculateRelevanceScore(
+  video: VideoRecord,
+  context: RelevanceContext | PlaylistRecord[] = {},
+): number {
+  const compiled = compileContext(context);
+  return calculateScoreWithCompiledContext(video, compiled);
+}
+
+/**
  * Sorts an array of videos by relevance score using the hybrid recommendation algorithm.
  */
 export function sortVideosByRelevance(
   videos: VideoRecord[],
   context: RelevanceContext | PlaylistRecord[] = {},
 ): VideoRecord[] {
+  const compiled = compileContext(context);
   const scored = videos.map((video) => ({
     video,
-    score: calculateRelevanceScore(video, context),
+    score: calculateScoreWithCompiledContext(video, compiled),
   }));
 
   scored.sort((a, b) => b.score - a.score);

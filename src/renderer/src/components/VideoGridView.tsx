@@ -399,7 +399,18 @@ export const VideoGridView: React.FC = () => {
     visibleRange.start,
     visibleRange.end,
   );
-  const activeImportsList = Object.values(activeImports) as any[];
+  // Filter out any active import that has already completed and is loaded into the videos array
+  const activeImportsList = useMemo(() => {
+    return (Object.values(activeImports) as any[]).filter((task) => {
+      if (!task || task.percent >= 100) return false;
+      const alreadyInVideos = videos.some(
+        (v) =>
+          v.id === task.taskId ||
+          (v.title && task.fileName && v.title.toLowerCase() === task.fileName.toLowerCase()),
+      );
+      return !alreadyInVideos;
+    });
+  }, [activeImports, videos]);
 
   // Indicator text
   const totalItems = sortedVideos.length;
@@ -477,14 +488,10 @@ export const VideoGridView: React.FC = () => {
                       />
                     </div>
 
-                    {/* Step Badge */}
+                    {/* Percentage Badge */}
                     <div className="bg-primary/95 animate-fade-in absolute left-1.5 top-1.5 flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold text-white shadow backdrop-blur-md">
                       <Sparkles className="h-2.5 w-2.5 animate-pulse text-amber-300" />
-                      Step {importTask.step}/4{" "}
-                      {importTask.workDone !== undefined &&
-                      importTask.totalWork !== undefined
-                        ? `(${Math.round(importTask.workDone)}/${Math.round(importTask.totalWork)})`
-                        : `(${importTask.percent}%)`}
+                      {importTask.percent}%
                     </div>
                   </div>
 
@@ -497,8 +504,8 @@ export const VideoGridView: React.FC = () => {
                     </div>
 
                     <div className="flex items-center justify-between border-t border-border/60 pt-1.5 text-[10px] text-muted">
-                      <span className="font-mono text-primary-text">
-                        Step {importTask.step}/4
+                      <span className="font-mono font-semibold text-primary-text">
+                        {importTask.percent}%
                       </span>
                       <div className="flex items-center gap-2">
                         <span className="flex items-center gap-1 text-[10px] text-muted">

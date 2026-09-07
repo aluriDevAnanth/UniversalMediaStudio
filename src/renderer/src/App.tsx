@@ -42,40 +42,50 @@ export default function App(): React.JSX.Element {
   useEffect(() => {
     checkAuthStatus();
 
+    let unsubCatalog: (() => void) | undefined;
+    if (window.api?.videos?.onCatalogRefresh) {
+      unsubCatalog = window.api.videos.onCatalogRefresh(() => {
+        fetchData();
+      });
+    }
+
     if (window.api?.videos?.onProgressUpdate) {
       let updateQueue: Record<string, any> = {};
       let throttleTimeout: ReturnType<typeof setTimeout> | null = null;
 
-      const unsub = window.api.videos.onProgressUpdate((data) => {
-        if (data.percent === 100 && data.step === 4) {
+      const unsubProgress = window.api.videos.onProgressUpdate((data) => {
+        if (data.percent >= 100) {
           delete updateQueue[data.taskId];
-          // Remove task from activeImports when complete and refresh the data
-          setTimeout(() => {
-            removeActiveImport(data.taskId);
-            fetchData();
-          }, 1000);
+          // Immediately remove the importing card and refresh library catalog
+          removeActiveImport(data.taskId);
+          fetchData();
         } else {
           // Queue the progress update
           updateQueue[data.taskId] = data;
 
-          // Throttle updates to React state to once every 250ms
+          // Throttle updates to React state to once every 200ms for smooth 60fps rendering
           if (!throttleTimeout) {
             throttleTimeout = setTimeout(() => {
               Object.values(updateQueue).forEach((progress) => {
-                updateActiveImport(progress);
+                if (progress && progress.percent < 100) {
+                  updateActiveImport(progress);
+                }
               });
               updateQueue = {};
               throttleTimeout = null;
-            }, 250);
+            }, 200);
           }
         }
       });
       return () => {
-        if (typeof unsub === "function") unsub();
+        if (typeof unsubProgress === "function") unsubProgress();
+        if (typeof unsubCatalog === "function") unsubCatalog();
         if (throttleTimeout) clearTimeout(throttleTimeout);
       };
     }
-    return undefined;
+    return () => {
+      if (typeof unsubCatalog === "function") unsubCatalog();
+    };
   }, []);
 
   useGlobalShortcuts({
@@ -223,13 +233,15 @@ export default function App(): React.JSX.Element {
       "info",
     );
 
-    const promises = validFiles.map(async (file) => {
+    const baseDropTime = Date.now();
+    const promises = validFiles.map(async (file, index) => {
       const filePath =
         window.api?.webUtils?.getPathForFile?.(file) ||
         (file as any).path ||
         "";
       if (filePath) {
-        const tempTaskId = `vid_temp_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+        const tempTaskId = `vid_temp_${baseDropTime}_${index}_${Math.floor(Math.random() * 1000)}`;
+        const creationTimestamp = new Date(baseDropTime + index * 10).toISOString();
         updateActiveImport({
           taskId: tempTaskId,
           fileName: file.name,
@@ -240,7 +252,7 @@ export default function App(): React.JSX.Element {
           etaSeconds: null,
         });
         try {
-          await window.api.videos.importFilePath(filePath, tempTaskId);
+          await window.api.videos.importFilePath(filePath, tempTaskId, creationTimestamp);
         } catch (err: any) {
           console.error("Drag & Drop import error:", err);
           showToast(

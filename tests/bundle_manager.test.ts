@@ -137,4 +137,56 @@ describe("BundleManager & ADAUMC Container Engine", () => {
     const removedResult = await BundleManager.removeSubtitleTrack(bundleOut, "sub_en_1");
     expect(removedResult.metadata.assets["sub_en_1"]).toBeUndefined();
   });
+
+  it("should dynamically append multiple preview assets and gracefully fallback", async () => {
+    const bundleOut = path.join(tempDir, "append_test.adaumc");
+    const videoFile = path.join(tempDir, "test_vid.mp4");
+    const thumbFile = path.join(tempDir, "test_thumb.jpg");
+    const gifFile = path.join(tempDir, "test_preview.gif");
+    const spriteFile = path.join(tempDir, "test_sprite.jpg");
+
+    fs.writeFileSync(videoFile, Buffer.from("VIDEO_PAYLOAD_INITIAL_STAGE_1"));
+    fs.writeFileSync(thumbFile, Buffer.from("COVER_THUMBNAIL_BYTES"));
+    fs.writeFileSync(gifFile, Buffer.from("ANIMATED_GIF_BYTES"));
+    fs.writeFileSync(spriteFile, Buffer.from("SPRITE_SHEET_BYTES"));
+
+    // Stage 1 initial bundle with only video and thumbnail
+    await BundleManager.packBundle({
+      id: "vid_append_123",
+      title: "Append Test Video",
+      duration: 120,
+      resolution: "1920x1080",
+      tags: ["test"],
+      assets: [
+        { key: "video", filePath: videoFile, mimeType: "video/mp4" },
+        { key: "thumbnail", filePath: thumbFile, mimeType: "image/jpeg" },
+      ],
+      outputPath: bundleOut,
+    });
+
+    // Before enrichment: gif request should fallback to thumbnail slice without error
+    const gifFallback = BundleManager.readAssetSlice(bundleOut, "gif");
+    expect(gifFallback.buffer.toString()).toBe("COVER_THUMBNAIL_BYTES");
+
+    // Stage 2: Append deferred assets
+    const updatedMeta = await BundleManager.appendAssetsToBundle(bundleOut, [
+      { key: "gif", filePath: gifFile, mimeType: "image/gif" },
+      { key: "sprite_1", filePath: spriteFile, mimeType: "image/jpeg" },
+    ]);
+
+    expect(updatedMeta.assets["gif"]).toBeDefined();
+    expect(updatedMeta.assets["sprite_1"]).toBeDefined();
+
+    // After enrichment: reading gif and sprite slices return exact payloads
+    const gifSlice = BundleManager.readAssetSlice(bundleOut, "gif");
+    expect(gifSlice.buffer.toString()).toBe("ANIMATED_GIF_BYTES");
+
+    const spriteSlice = BundleManager.readAssetSlice(bundleOut, "sprite_1");
+    expect(spriteSlice.buffer.toString()).toBe("SPRITE_SHEET_BYTES");
+
+    // Video slice remains completely uncorrupted
+    const videoSlice = BundleManager.readAssetSlice(bundleOut, "video");
+    expect(videoSlice.buffer.toString()).toBe("VIDEO_PAYLOAD_INITIAL_STAGE_1");
+  });
 });
+

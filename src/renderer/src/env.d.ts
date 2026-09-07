@@ -52,7 +52,7 @@ export interface IElectronAPI {
   videos: {
     getAll: () => Promise<VideoRecord[]>;
     importFile: () => Promise<VideoRecord | null>;
-    importFilePath: (filePath: string, taskId?: string) => Promise<VideoRecord | null>;
+    importFilePath: (filePath: string, taskId?: string, createdAt?: string) => Promise<VideoRecord | null>;
     cancelImport: (taskId?: string) => Promise<boolean>;
     delete: (id: string) => Promise<boolean>;
     incrementPlay: (id: string) => Promise<void>;
@@ -69,6 +69,7 @@ export interface IElectronAPI {
         etaSeconds: number | null;
       }) => void,
     ) => () => void;
+    onCatalogRefresh?: (callback: () => void) => () => void;
   };
   playlists: {
     get: () => Promise<PlaylistRecord[]>;
