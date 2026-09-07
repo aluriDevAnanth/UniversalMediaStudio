@@ -1,5 +1,7 @@
 node_modules
 /out
+/data
+data/
 bun.lock
 
 node_modules/
