@@ -43,8 +43,8 @@ console.log(`📁 Target Zip (Outside Root): ${outputPath}\n`);
 // 3. Setup gitignore parser
 const ig = ignore();
 
-// Always exclude .git folder, node_modules, and zip outputs
-ig.add([".git", ".git/**", "node_modules", "node_modules/**", zipFileName, "*.zip"]);
+// Always exclude node_modules and zip outputs
+ig.add(["node_modules", "node_modules/**", zipFileName, "*.zip"]);
 
 const gitignorePath = path.join(rootDir, ".gitignore");
 if (fs.existsSync(gitignorePath)) {

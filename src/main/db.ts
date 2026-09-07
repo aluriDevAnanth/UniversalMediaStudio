@@ -1,13 +1,8 @@
 import fs from "fs";
 import path from "path";
-import os from "os";
 import bcrypt from "bcryptjs";
-
-let electronApp: any = null;
-try {
-  const electron = require("electron");
-  electronApp = electron?.app || electron?.default?.app || null;
-} catch {}
+import { getDatabasePath, getLegacyDatabasePath } from "./paths";
+import { EncryptedSQLiteEngine } from "./encrypted_sqlite";
 
 export interface VideoRecord {
   id: string;
@@ -49,31 +44,23 @@ interface DBData {
   tagMetadata?: Record<string, TagMetaItem>;
   categoryColors?: Record<string, string>;
   analytics: AnalyticsRecord;
+  lastImportDirectory?: string;
 }
 
 export class Database {
   private dbPath: string;
+  private sqliteEngine: EncryptedSQLiteEngine;
   private data: DBData;
+  private activeMasterPassword: string | null = null;
+
+  private isCustomPath = false;
 
   constructor(customDbPath?: string) {
-    if (customDbPath) {
-      this.dbPath = customDbPath;
-    } else {
-      let userDataPath = path.join(os.tmpdir(), "UniversalMediaStudio");
-      try {
-        if (electronApp && typeof electronApp.getPath === "function") {
-          userDataPath = electronApp.getPath("userData");
-        }
-      } catch {}
-      this.dbPath = path.join(userDataPath, "mediahub_store.json");
-    }
-    const dir = path.dirname(this.dbPath);
-    if (!fs.existsSync(dir)) {
-      try {
-        fs.mkdirSync(dir, { recursive: true });
-      } catch {}
-    }
-    this.data = this.load();
+    this.isCustomPath = !!customDbPath;
+    this.dbPath = customDbPath || getDatabasePath();
+    const sqlitePath = this.dbPath.endsWith(".enc") ? this.dbPath : `${this.dbPath}.enc`;
+    this.sqliteEngine = new EncryptedSQLiteEngine(sqlitePath);
+    this.data = this.loadLegacyOrDefaults();
     this.initDefaults();
     this.cleanGenericTags();
   }
@@ -91,13 +78,31 @@ export class Database {
     }
   }
 
-  private load(): DBData {
-    if (fs.existsSync(this.dbPath)) {
+  private loadLegacyOrDefaults(): DBData {
+    const loadPath = this.dbPath.endsWith(".json") ? this.dbPath : getLegacyDatabasePath();
+    if (fs.existsSync(loadPath)) {
       try {
-        const raw = fs.readFileSync(this.dbPath, "utf-8");
+        const raw = fs.readFileSync(loadPath, "utf-8");
         return JSON.parse(raw);
       } catch (err) {
-        console.error("Failed to parse DB file, resetting defaults", err);
+        console.error("Failed to parse DB file, using defaults", err);
+      }
+    }
+
+    // Fallback: Check AppData location if migrating to portable mode for the first time (only in non-test mode)
+    if (!this.isCustomPath) {
+      const appDataFallback = path.join(
+        require("os").homedir(),
+        "AppData",
+        "Roaming",
+        "UniversalMediaStudio",
+        "mediahub_store.json"
+      );
+      if (fs.existsSync(appDataFallback)) {
+        try {
+          const raw = fs.readFileSync(appDataFallback, "utf-8");
+          return JSON.parse(raw);
+        } catch {}
       }
     }
     return {
@@ -114,7 +119,27 @@ export class Database {
   }
 
   private save(): void {
-    fs.writeFileSync(this.dbPath, JSON.stringify(this.data, null, 2), "utf-8");
+    // 1. Sync to in-memory state
+    // 2. If SQLite is unlocked with active password, persist to encrypted SQLite container
+    if (this.activeMasterPassword && this.sqliteEngine.isUnlocked()) {
+      try {
+        this.syncToEncryptedSqlite();
+      } catch (err) {
+        console.error("Error syncing to encrypted SQLite DB:", err);
+      }
+    }
+
+    // Also persist legacy JSON mirror during transitional period
+    try {
+      const savePath = this.dbPath.endsWith(".json") ? this.dbPath : getLegacyDatabasePath();
+      const dir = path.dirname(savePath);
+      if (!fs.existsSync(dir)) {
+        try {
+          fs.mkdirSync(dir, { recursive: true });
+        } catch {}
+      }
+      fs.writeFileSync(savePath, JSON.stringify(this.data, null, 2), "utf-8");
+    } catch {}
   }
 
   private initDefaults(): void {
@@ -140,21 +165,130 @@ export class Database {
     this.save();
   }
 
+  /**
+   * Sync active memory state into Encrypted SQLite database tables
+   */
+  public syncToEncryptedSqlite(): void {
+    if (!this.sqliteEngine.isUnlocked()) return;
+    const rawDb = this.sqliteEngine.getRawDb();
+
+    rawDb.run("BEGIN TRANSACTION;");
+    try {
+      // Sync App State
+      rawDb.run("INSERT OR REPLACE INTO app_state (key, value) VALUES (?, ?)", [
+        "masterPasswordHash",
+        this.data.masterPasswordHash || "",
+      ]);
+      rawDb.run("INSERT OR REPLACE INTO app_state (key, value) VALUES (?, ?)", [
+        "analytics",
+        JSON.stringify(this.data.analytics),
+      ]);
+      if (this.data.lastImportDirectory) {
+        rawDb.run("INSERT OR REPLACE INTO app_state (key, value) VALUES (?, ?)", [
+          "lastImportDirectory",
+          this.data.lastImportDirectory,
+        ]);
+      }
+
+      // Sync Videos
+      for (const v of Object.values(this.data.videos)) {
+        rawDb.run(
+          `INSERT OR REPLACE INTO videos (
+            id, title, duration, resolution, tags, bundle_path, created_at, play_count, last_watched_at, file_size
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            v.id,
+            v.title,
+            v.duration,
+            v.resolution,
+            JSON.stringify(v.tags || []),
+            v.bundlePath,
+            v.createdAt,
+            v.playCount || 0,
+            v.lastWatchedAt || null,
+            v.fileSize || 0,
+          ]
+        );
+      }
+
+      // Sync Playlists
+      for (const p of Object.values(this.data.playlists)) {
+        rawDb.run(
+          `INSERT OR REPLACE INTO playlists (
+            id, name, is_default, video_ids, created_at
+          ) VALUES (?, ?, ?, ?, ?)`,
+          [p.id, p.name, p.isDefault ? 1 : 0, JSON.stringify(p.videoIds || []), p.createdAt]
+        );
+      }
+
+      // Sync Tag Metadata
+      if (this.data.tagMetadata) {
+        for (const [tag, meta] of Object.entries(this.data.tagMetadata)) {
+          rawDb.run(
+            `INSERT OR REPLACE INTO tag_metadata (tag, color, category) VALUES (?, ?, ?)`,
+            [tag, meta.color, meta.category || ""]
+          );
+        }
+      }
+
+      // Sync Category Colors
+      if (this.data.categoryColors) {
+        for (const [cat, col] of Object.entries(this.data.categoryColors)) {
+          rawDb.run(
+            `INSERT OR REPLACE INTO category_colors (category, color) VALUES (?, ?)`,
+            [cat, col]
+          );
+        }
+      }
+
+      rawDb.run("COMMIT;");
+      this.sqliteEngine.saveEncrypted();
+    } catch (err) {
+      rawDb.run("ROLLBACK;");
+      throw err;
+    }
+  }
+
   // Master Auth methods
   public isPasswordSet(): boolean {
-    return !!this.data.masterPasswordHash;
+    return !!this.data.masterPasswordHash || this.sqliteEngine.hasMasterPassword();
   }
 
   public setMasterPassword(password: string): boolean {
     const salt = bcrypt.genSaltSync(10);
     this.data.masterPasswordHash = bcrypt.hashSync(password, salt);
+    this.activeMasterPassword = password;
+
+    try {
+      this.sqliteEngine.unlockWithPassword(password).then(() => {
+        this.syncToEncryptedSqlite();
+      }).catch((e) => {
+        console.error("Error setting SQLite master password:", e);
+      });
+    } catch {}
+
     this.save();
     return true;
   }
 
   public verifyMasterPassword(password: string): boolean {
     if (!this.data.masterPasswordHash) return false;
-    return bcrypt.compareSync(password, this.data.masterPasswordHash);
+    const match = bcrypt.compareSync(password, this.data.masterPasswordHash);
+    if (match) {
+      this.activeMasterPassword = password;
+      try {
+        this.sqliteEngine.unlockWithPassword(password).then(() => {
+          this.syncToEncryptedSqlite();
+        }).catch((e) => {
+          console.error("Error unlocking SQLite vault:", e);
+        });
+      } catch {}
+    }
+    return match;
+  }
+
+  public getEncryptedEngine(): EncryptedSQLiteEngine {
+    return this.sqliteEngine;
   }
 
   // Videos
@@ -187,6 +321,15 @@ export class Database {
       for (const p of Object.values(this.data.playlists)) {
         p.videoIds = p.videoIds.filter((vId) => vId !== id);
       }
+
+      if (this.sqliteEngine.isUnlocked()) {
+        try {
+          const rawDb = this.sqliteEngine.getRawDb();
+          rawDb.run("DELETE FROM videos WHERE id = ?", [id]);
+          this.sqliteEngine.saveEncrypted();
+        } catch {}
+      }
+
       this.save();
       return true;
     }
@@ -242,6 +385,13 @@ export class Database {
     const pl = this.data.playlists[playlistId];
     if (pl && !pl.isDefault) {
       delete this.data.playlists[playlistId];
+      if (this.sqliteEngine.isUnlocked()) {
+        try {
+          const rawDb = this.sqliteEngine.getRawDb();
+          rawDb.run("DELETE FROM playlists WHERE id = ?", [playlistId]);
+          this.sqliteEngine.saveEncrypted();
+        } catch {}
+      }
       this.save();
       return true;
     }
@@ -306,7 +456,7 @@ export class Database {
       delete this.data.tagMetadata[tag];
     }
     for (const v of Object.values(this.data.videos)) {
-      v.tags = v.tags.filter((t) => t !== tag);
+      v.tags = v.tags.filter((t) => !tag || t !== tag);
     }
     this.save();
     return this.data.tags;
@@ -389,6 +539,18 @@ export class Database {
       tagDistribution: tagCounts,
       analyticsData: this.data.analytics,
     };
+  }
+
+  // Last Import Directory Preference
+  public getLastImportDirectory(): string | undefined {
+    return this.data.lastImportDirectory;
+  }
+
+  public setLastImportDirectory(dir: string): void {
+    if (dir && typeof dir === "string") {
+      this.data.lastImportDirectory = dir;
+      this.save();
+    }
   }
 }
 

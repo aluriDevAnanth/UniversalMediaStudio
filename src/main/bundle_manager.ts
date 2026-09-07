@@ -38,9 +38,7 @@ export interface BuildAdaumcInput {
 }
 
 export const ADAUMC_MAGIC = Buffer.from([0x41, 0x44, 0x41, 0x55, 0x4d, 0x43]); // 'ADAUMC' (6 Bytes)
-const MASK_KEY = Buffer.from("AdaumcSecretKey2026!"); // Stream cipher XOR key (20 Bytes)
-// Pre-repeat 20-byte key to 80 bytes for fast unrolled word alignment
-const REPEATED_KEY = Buffer.concat([MASK_KEY, MASK_KEY, MASK_KEY, MASK_KEY]);
+import { applyStreamCipher, applyStreamCipherInPlace } from "./native_cipher";
 
 class CipherTransform extends Transform {
   private offset: number;
@@ -58,39 +56,20 @@ class CipherTransform extends Transform {
 
 export class BundleManager {
   /**
-   * Fast stream cipher XOR mask function with 8-byte unrolled loop
+   * Fast stream cipher XOR mask function with AVX2 SIMD / 8-byte unrolled loop
    */
   public static applyStreamCipherMask(
     data: Buffer,
     startOffset: number = 0,
   ): Buffer {
-    const len = data.length;
-    const result = Buffer.allocUnsafe(len);
-    const keyLen = 20;
-    let keyIdx = startOffset % keyLen;
+    return applyStreamCipher(data, startOffset);
+  }
 
-    let i = 0;
-    const fastLimit = len - 8;
-    while (i <= fastLimit) {
-      result[i] = data[i] ^ REPEATED_KEY[keyIdx];
-      result[i + 1] = data[i + 1] ^ REPEATED_KEY[keyIdx + 1];
-      result[i + 2] = data[i + 2] ^ REPEATED_KEY[keyIdx + 2];
-      result[i + 3] = data[i + 3] ^ REPEATED_KEY[keyIdx + 3];
-      result[i + 4] = data[i + 4] ^ REPEATED_KEY[keyIdx + 4];
-      result[i + 5] = data[i + 5] ^ REPEATED_KEY[keyIdx + 5];
-      result[i + 6] = data[i + 6] ^ REPEATED_KEY[keyIdx + 6];
-      result[i + 7] = data[i + 7] ^ REPEATED_KEY[keyIdx + 7];
-      keyIdx = (keyIdx + 8) % keyLen;
-      i += 8;
-    }
-
-    while (i < len) {
-      result[i] = data[i] ^ REPEATED_KEY[keyIdx];
-      keyIdx = (keyIdx + 1) % keyLen;
-      i++;
-    }
-
-    return result;
+  public static applyStreamCipherInPlace(
+    data: Buffer,
+    startOffset: number = 0,
+  ): void {
+    applyStreamCipherInPlace(data, startOffset);
   }
 
   /**
@@ -445,6 +424,18 @@ export class BundleManager {
   }
 
   /**
+   * Alias for addSubtitleTrack
+   */
+  public static async addSubtitle(
+    bundlePath: string,
+    subtitleFilePath: string,
+    label?: string,
+    lang?: string,
+  ): Promise<{ assetKey: string; metadata: AdaumcMetadata }> {
+    return this.addSubtitleTrack(bundlePath, subtitleFilePath, label, lang);
+  }
+
+  /**
    * Dynamically removes a subtitle track asset key from an .adaumc bundle metadata header
    */
   public static async removeSubtitleTrack(
@@ -457,6 +448,64 @@ export class BundleManager {
       this.writeMetadataHeader(bundlePath, metadata);
     }
     return { assetKey, metadata };
+  }
+
+  /**
+   * Dynamically appends multiple preview assets (e.g. GIF, sprites, VTT) into an existing .adaumc bundle
+   */
+  public static async appendAssetsToBundle(
+    bundlePath: string,
+    assets: { key: string; filePath: string; mimeType: string }[],
+  ): Promise<AdaumcMetadata> {
+    if (!fs.existsSync(bundlePath)) {
+      throw new Error(`Bundle file not found: ${bundlePath}`);
+    }
+
+    const { metadata, payloadStartOffset } = this.readMetadata(bundlePath);
+    const stat = fs.statSync(bundlePath);
+    let currentOffset = Math.max(0, stat.size - payloadStartOffset);
+
+    if (!metadata.assets) {
+      metadata.assets = {};
+    }
+
+    const chunksToAppend: Buffer[] = [];
+
+    for (const asset of assets) {
+      if (fs.existsSync(asset.filePath)) {
+        const fileStat = fs.statSync(asset.filePath);
+        const data = fs.readFileSync(asset.filePath);
+        const encrypted = this.applyStreamCipherMask(data, currentOffset);
+        chunksToAppend.push(encrypted);
+
+        metadata.assets[asset.key] = {
+          offset: currentOffset,
+          length: fileStat.size,
+          filename: path.basename(asset.filePath),
+          mimeType: asset.mimeType,
+        };
+
+        currentOffset += fileStat.size;
+      }
+    }
+
+    if (chunksToAppend.length > 0) {
+      const combined = Buffer.concat(chunksToAppend);
+      fs.appendFileSync(bundlePath, combined);
+    }
+
+    this.writeMetadataHeader(bundlePath, metadata);
+    return metadata;
+  }
+
+  /**
+   * Alias for removeSubtitleTrack
+   */
+  public static async removeSubtitle(
+    bundlePath: string,
+    assetKey: string,
+  ): Promise<{ assetKey: string; metadata: AdaumcMetadata }> {
+    return this.removeSubtitleTrack(bundlePath, assetKey);
   }
 
   public static getOptimalBufferSize(metadata: AdaumcMetadata, assetKey: string): number {
@@ -495,7 +544,11 @@ export class BundleManager {
     end: number;
   } {
     const { metadata, payloadStartOffset } = this.readMetadata(bundlePath);
-    const asset = metadata.assets[assetKey];
+    let asset = metadata.assets[assetKey];
+
+    if (!asset && assetKey === "gif" && metadata.assets?.["thumbnail"]) {
+      asset = metadata.assets["thumbnail"];
+    }
 
     if (!asset) {
       throw new Error(
@@ -602,6 +655,12 @@ export class BundleManager {
           start: 0,
           end: fallbackBuf.length - 1,
         };
+      }
+      if (assetKey === "gif" && metadata.assets?.["thumbnail"]) {
+        return this.readAssetSlice(bundlePath, "thumbnail", startByte, endByte);
+      }
+      if (assetKey.startsWith("sprite_") && metadata.assets?.["thumbnail"]) {
+        return this.readAssetSlice(bundlePath, "thumbnail", startByte, endByte);
       }
       throw new Error(
         `Asset key '${assetKey}' not found in bundle ${bundlePath}`,

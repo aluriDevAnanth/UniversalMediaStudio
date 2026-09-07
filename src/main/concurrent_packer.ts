@@ -31,6 +31,10 @@ export class ConcurrentPacker {
   private writeStream: fs.WriteStream;
   private videoPromise!: Promise<number>; // resolves with video size
   private outputPath: string;
+  private totalBytesWritten = 0;
+  private totalVideoBytes = 0;
+  private readStream?: fs.ReadStream;
+  private cipher?: CipherTransform;
 
   constructor(outputPath: string) {
     this.outputPath = outputPath;
@@ -48,25 +52,42 @@ export class ConcurrentPacker {
   }
 
   /**
-   * Start background piping & encryption of the video file
+   * Start background piping & encryption of the video file with real-time byte progress reporting
    */
-  public startPackingVideo(videoPath: string): void {
-    this.videoPromise = new Promise((resolve, reject) => {
-      const readStream = fs.createReadStream(videoPath, { highWaterMark: 1024 * 1024 });
-      const cipher = new CipherTransform(0);
+  public startPackingVideo(videoPath: string, onProgress?: (percent: number) => void): void {
+    const fileStats = fs.statSync(videoPath);
+    this.totalVideoBytes = fileStats.size;
+    this.totalBytesWritten = 0;
 
-      readStream.on("error", reject);
-      cipher.on("error", reject);
+    this.videoPromise = new Promise((resolve, reject) => {
+      this.readStream = fs.createReadStream(videoPath, { highWaterMark: 1024 * 1024 });
+      this.cipher = new CipherTransform(0);
+
+      this.readStream.on("data", (chunk: Buffer) => {
+        this.totalBytesWritten += chunk.length;
+
+        // Calculate dynamic Step 4 progress (30% to 90% allocated for video streaming)
+        if (this.totalVideoBytes > 0 && onProgress) {
+          const streamRatio = this.totalBytesWritten / this.totalVideoBytes;
+          const totalProgress = Math.min(90, Math.floor(30 + streamRatio * 60)); // Maps 0-100% stream to 30-90% UI
+          onProgress(totalProgress);
+        }
+      });
+
+      this.readStream.on("error", reject);
+      this.cipher.on("error", reject);
       this.writeStream.on("error", reject);
 
-      cipher.on("end", () => {
-        const stat = fs.statSync(videoPath);
-        resolve(stat.size);
+      this.cipher.on("end", () => {
+        if (onProgress) {
+          onProgress(90);
+        }
+        resolve(this.totalVideoBytes);
       });
 
       // Write directly to our open bundle file
-      cipher.pipe(this.writeStream, { end: false });
-      readStream.pipe(cipher);
+      this.cipher.pipe(this.writeStream, { end: false });
+      this.readStream.pipe(this.cipher);
     });
   }
 
@@ -231,6 +252,8 @@ export class ConcurrentPacker {
 
   public abort(): void {
     try {
+      if (this.readStream) this.readStream.destroy();
+      if (this.cipher) this.cipher.destroy();
       this.writeStream.destroy();
     } catch (e) {}
   }
