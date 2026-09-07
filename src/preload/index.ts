@@ -9,8 +9,8 @@ const api = {
   videos: {
     getAll: () => ipcRenderer.invoke("videos:getAll"),
     importFile: () => ipcRenderer.invoke("videos:importFile"),
-    importFilePath: (filePath: string, taskId?: string) =>
-      ipcRenderer.invoke("videos:importFilePath", filePath, taskId),
+    importFilePath: (filePath: string, taskId?: string, createdAt?: string) =>
+      ipcRenderer.invoke("videos:importFilePath", filePath, taskId, createdAt),
     cancelImport: (taskId?: string) => ipcRenderer.invoke("videos:cancelImport", taskId),
     delete: (id: string) => ipcRenderer.invoke("videos:delete", id),
     incrementPlay: (id: string) =>
@@ -30,10 +30,15 @@ const api = {
     ) => {
       const handler = (_: any, data: any) => callback(data);
       ipcRenderer.on("video:importProgress", handler);
-      ipcRenderer.on("progress:update", handler);
       return () => {
         ipcRenderer.removeListener("video:importProgress", handler);
-        ipcRenderer.removeListener("progress:update", handler);
+      };
+    },
+    onCatalogRefresh: (callback: () => void) => {
+      const handler = () => callback();
+      ipcRenderer.on("catalog:refresh", handler);
+      return () => {
+        ipcRenderer.removeListener("catalog:refresh", handler);
       };
     },
   },

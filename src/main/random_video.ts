@@ -1,8 +1,22 @@
 import path from "path";
 import fs from "fs";
-import { FFmpegProcessor, SpriteProgressUpdate, makeLog } from "./ffmpeg_worker";
+import os from "os";
+import { FFmpegProcessor, makeLog } from "./ffmpeg_processor";
+import { getBundlesDir, getTempProcessingDir } from "./paths";
+import { BundleManager } from "./bundle_manager";
+import { db, VideoRecord } from "./db";
+import { ConcurrentPacker } from "./concurrent_packer";
+import { GLOBAL_DEFERRED_ASSET_QUEUE } from "./deferred_asset_queue";
 
-function getUserDataDir(): string {
+// Lower background process priority so desktop UI remains 60FPS smooth
+try {
+  os.setPriority(os.constants.priority.PRIORITY_BELOW_NORMAL);
+} catch {}
+
+export function getUserDataDir(): string {
+  if (process.env.UMS_USER_DATA_DIR) {
+    return process.env.UMS_USER_DATA_DIR;
+  }
   try {
     const electron = require("electron");
     const app = electron?.app || electron?.default?.app;
@@ -12,9 +26,6 @@ function getUserDataDir(): string {
   } catch {}
   return path.join(require("os").homedir(), ".universal_media_studio");
 }
-import { BundleManager } from "./bundle_manager";
-import { db, VideoRecord } from "./db";
-import { ConcurrentPacker } from "./concurrent_packer";
 
 export interface ProgressUpdate {
   taskId: string;
@@ -24,39 +35,36 @@ export interface ProgressUpdate {
   percent: number;
   workDone?: number;
   totalWork?: number;
-  log: string;
+  log?: string;
   etaSeconds: number | null;
 }
 
 export type ImportProgress = ProgressUpdate;
 
 export class VideoImportQueue {
-  private activeCount = 0;
-  private maxConcurrency: number;
-  private queue: Array<{
+  private queue: {
     taskId: string;
     resolve: () => void;
-    reject: (err: any) => void;
-  }> = [];
+    reject: (err: Error) => void;
+    onPositionChange?: (pos: number) => void;
+  }[] = [];
+  private activeCount = 0;
 
-  constructor(maxConcurrency = 2) {
-    this.maxConcurrency = maxConcurrency;
-  }
+  constructor(private limit: number) {}
 
-  public getQueuePosition(taskId: string): number {
-    const idx = this.queue.findIndex((item) => item.taskId === taskId);
-    return idx >= 0 ? idx + 1 : 0;
-  }
-
-  public async acquire(taskId: string, onWait?: (pos: number) => void): Promise<void> {
-    if (this.activeCount < this.maxConcurrency) {
+  public async acquire(
+    taskId: string,
+    onPositionChange?: (pos: number) => void,
+  ): Promise<void> {
+    if (this.activeCount < this.limit) {
       this.activeCount++;
       return;
     }
+
     return new Promise<void>((resolve, reject) => {
-      this.queue.push({ taskId, resolve, reject });
-      if (onWait) {
-        onWait(this.queue.length);
+      this.queue.push({ taskId, resolve, reject, onPositionChange });
+      if (onPositionChange) {
+        onPositionChange(this.queue.length);
       }
     });
   }
@@ -65,11 +73,21 @@ export class VideoImportQueue {
     if (this.queue.length > 0) {
       const next = this.queue.shift();
       if (next) {
+        this.queue.forEach((item, index) => {
+          if (item.onPositionChange) {
+            item.onPositionChange(index + 1);
+          }
+        });
         next.resolve();
       }
     } else {
       this.activeCount = Math.max(0, this.activeCount - 1);
     }
+  }
+
+  public getQueuePosition(taskId: string): number {
+    const idx = this.queue.findIndex((item) => item.taskId === taskId);
+    return idx >= 0 ? idx + 1 : 0;
   }
 
   public cancel(taskId: string): void {
@@ -81,7 +99,10 @@ export class VideoImportQueue {
   }
 }
 
-export const GLOBAL_VIDEO_IMPORT_QUEUE = new VideoImportQueue(2);
+const CPU_CORES = typeof os !== "undefined" && os.cpus ? os.cpus().length : 4;
+export const GLOBAL_VIDEO_IMPORT_QUEUE = new VideoImportQueue(
+  Math.min(8, Math.max(2, CPU_CORES - 1)),
+);
 
 export const activeImportTasks = new Map<string, { videoId: string; isCancelled: boolean }>();
 
@@ -110,7 +131,9 @@ export async function importVideoFile(
   selectedPath: string,
   onProgress?: (progress: ImportProgress) => void,
   taskId?: string,
+  initialCreatedAt?: string,
 ): Promise<VideoRecord | null> {
+  const fileCreatedAt = initialCreatedAt || new Date().toISOString();
   let packer: ConcurrentPacker | null = null;
   const ext = path.extname(selectedPath).toLowerCase().replace(".", "");
   const videoExtensions = ["mp4", "mkv", "avi", "webm", "mov", "m4v", "adaumc"];
@@ -131,6 +154,9 @@ export async function importVideoFile(
   const normPath = path.normalize(selectedPath).toLowerCase();
   const fileKey = `${fileName.toLowerCase()}_${inputSizeBytes}`;
 
+  let lastBroadcastTime = 0;
+  let lastBroadcastPercent = -1;
+
   const broadcastProgress = (
     step: number,
     percent: number,
@@ -138,7 +164,25 @@ export async function importVideoFile(
     etaSeconds: number | null = null,
     workDone?: number,
     totalWork?: number,
+    force = false,
   ) => {
+    const now = Date.now();
+    // Throttle progress updates to at most once every 200ms per task, unless 0%, 100%, or forced
+    if (
+      !force &&
+      percent !== 0 &&
+      percent !== 100 &&
+      percent === lastBroadcastPercent &&
+      now - lastBroadcastTime < 200
+    ) {
+      return;
+    }
+    if (!force && percent !== 0 && percent !== 100 && now - lastBroadcastTime < 200) {
+      return;
+    }
+    lastBroadcastTime = now;
+    lastBroadcastPercent = percent;
+
     if (onProgress) {
       onProgress({
         taskId: videoId,
@@ -154,14 +198,12 @@ export async function importVideoFile(
     }
   };
 
-  // 1. Active Task Deduplication Check
   if (activeImportFilePaths.has(normPath) || activeImportFilePaths.has(fileKey)) {
     console.log(`[Import Pre-check] Video '${fileName}' is currently being imported in another active task. Skipping.`);
-    broadcastProgress(4, 100, `Video '${fileName}' is already importing...`, 0);
+    broadcastProgress(4, 100, `Video '${fileName}' is already importing...`, 0, undefined, undefined, true);
     return null;
   }
 
-  // 2. Database Fast Pre-check (BEFORE creating temp folders, running ffprobe, or starting packer)
   const existingRecord = db.getAllVideos().find((v) => {
     if (v.bundlePath && path.normalize(v.bundlePath).toLowerCase() === normPath) return true;
     if (v.title.toLowerCase() === fileName.toLowerCase()) {
@@ -173,7 +215,7 @@ export async function importVideoFile(
 
   if (existingRecord) {
     console.log(`[Import Pre-check] Video '${fileName}' already exists in library. Skipping duplicate import.`);
-    broadcastProgress(4, 100, `Video '${fileName}' is already present in your library!`, 0);
+    broadcastProgress(4, 100, `Video '${fileName}' is already present in your library!`, 0, undefined, undefined, true);
     return existingRecord;
   }
 
@@ -187,7 +229,7 @@ export async function importVideoFile(
   let bundlePath = "";
 
   try {
-    // Acquire slot in the global import queue (max 2 videos processed simultaneously)
+    // Acquire slot in the global import queue (dynamic pool)
     await GLOBAL_VIDEO_IMPORT_QUEUE.acquire(videoId, (pos) => {
       broadcastProgress(0, 0, `Queued for processing (waiting in queue: position ${pos})...`);
     });
@@ -215,7 +257,7 @@ export async function importVideoFile(
           selectedPath,
           inputSizeBytes,
           osPlatform: process.platform,
-          cpuCores: require("os").cpus().length || 4,
+          cpuCores: CPU_CORES,
           nodeVersion: process.version,
         },
       }),
@@ -236,15 +278,10 @@ export async function importVideoFile(
       }
     };
 
-    // Handle pre-built .adaumc files imported directly
     if (selectedPath.endsWith(".adaumc")) {
       broadcastProgress(1, 50, `Importing pre-built .adaumc container file...`);
 
-      const bundlesDir = path.join(getUserDataDir(), "bundles");
-      if (!fs.existsSync(bundlesDir)) {
-        fs.mkdirSync(bundlesDir, { recursive: true });
-      }
-
+      const bundlesDir = getBundlesDir();
       const destBundlePath = path.join(bundlesDir, `${videoId}.adaumc`);
       fs.copyFileSync(selectedPath, destBundlePath);
 
@@ -257,7 +294,7 @@ export async function importVideoFile(
         resolution: metadata.resolution || "1920x1080",
         tags: metadata.tags || [],
         bundlePath: destBundlePath,
-        createdAt: new Date().toISOString(),
+        createdAt: fileCreatedAt,
         playCount: 0,
         fileSize: inputSizeBytes,
       };
@@ -267,63 +304,46 @@ export async function importVideoFile(
       activeImportFilePaths.delete(normPath);
       activeImportFilePaths.delete(fileKey);
 
-      broadcastProgress(1, 100, `Direct .adaumc import complete!`);
+      broadcastProgress(1, 100, `Direct .adaumc import complete!`, 0, undefined, undefined, true);
       return videoRecord;
     }
 
-    // Prepare temp output directory
-    const tempDir = path.join(getUserDataDir(), `temp_${videoId}`);
-    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
-
-    const bundlesDir = path.join(getUserDataDir(), "bundles");
-    if (!fs.existsSync(bundlesDir)) fs.mkdirSync(bundlesDir, { recursive: true });
+    const tempDir = getTempProcessingDir(videoId);
+    const bundlesDir = getBundlesDir();
 
     const tempThumbPath = path.join(tempDir, "thumbnail.jpg");
-    const tempGifPath = path.join(tempDir, "thumbnail.gif");
     const tempVttPath = path.join(tempDir, "preview.vtt");
-    const tempStreamableMp4 = path.join(tempDir, "streamable.mp4");
 
     bundlePath = path.join(bundlesDir, `${videoId}.adaumc`);
 
-    // Step 0: Probe metadata & prepare streamable faststart video
-    broadcastProgress(1, 5, `Probing video resolution & preparing streamable MP4...`);
+    // Probe metadata & Start background XOR stream
+    broadcastProgress(1, 5, `Probing video resolution & metadata...`);
 
     const videoMeta = await FFmpegProcessor.getVideoMetadata(selectedPath);
     if (videoMeta.logs && Array.isArray(videoMeta.logs)) {
       logs.push(...videoMeta.logs);
     }
 
-    const normRes = await FFmpegProcessor.prepareStreamableVideo(
-      videoId,
-      selectedPath,
-      tempStreamableMp4,
-      () => !!activeImportTasks.get(videoId)?.isCancelled,
-    );
-    if (normRes.logs && Array.isArray(normRes.logs)) {
-      logs.push(...normRes.logs);
-    }
-    const finalVideoToPack = normRes.streamablePath;
-
-    // Initialize Concurrent Video Packer to stream video in the background
+    // Initialize Concurrent Video Packer to stream video directly into container
     packer = new ConcurrentPacker(bundlePath);
-    packer.startPackingVideo(finalVideoToPack);
+    packer.startPackingVideo(selectedPath, (percent) => {
+      broadcastProgress(4, percent, `Streaming & encrypting video data (${percent}%)...`);
+    });
 
     logs.push(
       makeLog({
         event: "info",
-        step: 0,
+        step: 1,
         stepName: "Init",
         msg: `Probed metadata: duration=${videoMeta.duration}s, resolution=${videoMeta.resolution}, codec=${videoMeta.codec}`,
         details: {
           durationSec: videoMeta.duration,
           resolution: videoMeta.resolution,
           codec: videoMeta.codec,
-          isTranscoded: normRes.isTranscoded,
         },
       }),
     );
 
-    // Secondary Duplicate Prevention Check (after metadata probe)
     const alreadyExists = db.getAllVideos().find(
       (v) =>
         v.title.toLowerCase() === fileName.toLowerCase() &&
@@ -342,18 +362,18 @@ export async function importVideoFile(
       activeImportTasks.delete(videoId);
       activeImportFilePaths.delete(normPath);
       activeImportFilePaths.delete(fileKey);
-      broadcastProgress(4, 100, `Video already present in library! Skipping import...`, 0);
+      broadcastProgress(4, 100, `Video already present in library! Skipping import...`, 0, undefined, undefined, true);
       return alreadyExists;
     }
 
     checkCancelled();
 
-    // Step 1: Extract Static Cover Thumbnail
+    // Extract Static Cover Thumbnail (1 frame instant extraction)
     const thumbnailSeekSec = Math.min(180, Math.max(5, Math.floor(videoMeta.duration * 0.05)));
     broadcastProgress(
       1,
-      10,
-      `Step 1/4: Extracting static cover thumbnail at ${thumbnailSeekSec}s...`,
+      15,
+      `Extracting cover thumbnail at ${thumbnailSeekSec}s...`,
     );
 
     try {
@@ -378,89 +398,7 @@ export async function importVideoFile(
     }
 
     checkCancelled();
-    broadcastProgress(1, 100, `Step 1/4 Complete: Cover thumbnail extracted.`, 0);
-
-    // Step 2: Generate Entire Video Summary GIF
-    const step2Start = Date.now();
-    broadcastProgress(2, 0, `Step 2/4: Extracting video summary clips...`);
-
-    try {
-      const gifLogs = await FFmpegProcessor.generateGifMedianCut(
-        videoId,
-        selectedPath,
-        tempGifPath,
-        videoMeta.duration,
-        videoMeta.codec,
-        (completed, total) => {
-          const percent = Math.round((completed / total) * 100);
-          const elapsed = (Date.now() - step2Start) / 1000;
-          const rate = completed / Math.max(0.1, elapsed); // clips per second
-          const remaining = total - completed;
-          const eta = rate > 0 ? Math.round(remaining / rate) : null;
-          broadcastProgress(
-            2,
-            percent,
-            `Step 2/4: Extracting summary clips (${completed}/${total})...`,
-            eta,
-          );
-        },
-        () => !!activeImportTasks.get(videoId)?.isCancelled,
-      );
-      logs.push(...gifLogs);
-    } catch (e: any) {
-      logs.push(
-        makeLog({
-          level: "warn",
-          event: "warn",
-          step: 2,
-          stepName: "Summary GIF",
-          msg: `GIF generation notice: ${e.message}`,
-          details: { errorMsg: e.message, errorStack: e.stack },
-        }),
-      );
-    }
-
-    checkCancelled();
-    broadcastProgress(2, 100, `Step 2/4 Complete: Animated GIF summary preview generated.`, 0);
-
-    // Step 3: Generate WebVTT Sprite Sheet
-    broadcastProgress(3, 0, `Step 3/4: Generating timeline preview frames...`);
-
-    try {
-      const spriteRes = await FFmpegProcessor.generateSpriteSheetAndVTT(
-        videoId,
-        selectedPath,
-        tempDir,
-        videoMeta.duration,
-        videoMeta.codec,
-        ({ percentage, completedSecs, totalSecs, etaSeconds }: SpriteProgressUpdate) => {
-          broadcastProgress(
-            3,
-            Math.round(percentage),
-            `Step 3/4: Generating timeline frames (${completedSecs}/${totalSecs}s)...`,
-            etaSeconds,
-            completedSecs,
-            totalSecs,
-          );
-        },
-        () => !!activeImportTasks.get(videoId)?.isCancelled,
-      );
-      logs.push(...spriteRes.logs);
-    } catch (e: any) {
-      logs.push(
-        makeLog({
-          level: "warn",
-          event: "warn",
-          step: 3,
-          stepName: "Sprite+VTT",
-          msg: `Sprite grid notice: ${e.message}`,
-          details: { errorMsg: e.message, errorStack: e.stack },
-        }),
-      );
-    }
-
-    checkCancelled();
-    broadcastProgress(3, 100, `Step 3/4 Complete: WebVTT sprite sheets created.`, 0);
+    broadcastProgress(1, 30, `Cover thumbnail extracted.`, 0);
 
     function createFallbackImage(): Buffer {
       return Buffer.from(
@@ -469,19 +407,18 @@ export async function importVideoFile(
       );
     }
 
-    if (!fs.existsSync(tempThumbPath))
+    if (!fs.existsSync(tempThumbPath)) {
       fs.writeFileSync(tempThumbPath, createFallbackImage());
-    if (!fs.existsSync(tempGifPath))
-      fs.writeFileSync(tempGifPath, createFallbackImage());
-    if (!fs.existsSync(tempVttPath)) {
-      fs.writeFileSync(
-        tempVttPath,
-        `WEBVTT\n\n00:00.000 --> 00:30.000\nadaumc://${videoId}/sprite_1#xywh=0,0,240,135\n`,
-      );
     }
 
-    // Step 4: Finalize Bundle
-    broadcastProgress(4, 0, `Step 4/4: Finalizing bundle container...`);
+    // Default VTT fallback stub pointing to thumbnail until deferred sprite extraction completes
+    fs.writeFileSync(
+      tempVttPath,
+      `WEBVTT\n\n00:00.000 --> 99:59.000\nadaumc://${videoId}/thumbnail\n`,
+    );
+
+    // Finalize Initial Bundle for Instant Playback
+    broadcastProgress(4, 30, `Streaming video data & preparing bundle...`);
     const step4T0 = Date.now();
 
     // Save full telemetry logs into container_telemetry.ndjson asset file
@@ -490,37 +427,19 @@ export async function importVideoFile(
       fs.writeFileSync(tempLogsPath, logs.join("\n"), "utf-8");
     } catch (e) {}
 
-    const generatedAssets = [
+    const initialAssets = [
       { key: "thumbnail", filePath: tempThumbPath, mimeType: "image/jpeg" },
-      { key: "gif", filePath: tempGifPath, mimeType: "image/gif" },
       { key: "vtt", filePath: tempVttPath, mimeType: "text/vtt" },
       { key: "logs", filePath: tempLogsPath, mimeType: "application/x-ndjson" },
     ];
-
-    const tempFiles = fs.existsSync(tempDir) ? fs.readdirSync(tempDir) : [];
-    const spriteFiles = tempFiles
-      .filter((f) => f.startsWith("sprite_") && f.endsWith(".jpg"))
-      .sort((a, b) => {
-        const numA = parseInt(a.match(/\d+/)?.[0] || "0");
-        const numB = parseInt(b.match(/\d+/)?.[0] || "0");
-        return numA - numB;
-      });
-
-    spriteFiles.forEach((file, idx) => {
-      generatedAssets.push({
-        key: `sprite_${idx + 1}`,
-        filePath: path.join(tempDir, file),
-        mimeType: "image/jpeg",
-      });
-    });
 
     logs.push(
       makeLog({
         event: "step_start",
         step: 4,
         stepName: "Bundle Pack",
-        msg: `Packing ${generatedAssets.length} assets into .adaumc container`,
-        details: { assetCount: generatedAssets.length, bundlePath },
+        msg: `Packing initial ${initialAssets.length} assets into .adaumc container`,
+        details: { assetCount: initialAssets.length, bundlePath },
       }),
     );
 
@@ -531,8 +450,10 @@ export async function importVideoFile(
       videoMeta.resolution,
       [],
       logs,
-      generatedAssets,
+      initialAssets,
     );
+
+    broadcastProgress(4, 98, `Finalizing container metadata...`);
 
     logs.push(
       makeLog({
@@ -543,17 +464,13 @@ export async function importVideoFile(
       }),
     );
 
-    try {
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    } catch (e) {}
-
-    const processingTime = Math.round((Date.now() - startTime) / 1000);
+    const processingTime = Math.max(1, Math.round((Date.now() - startTime) / 1000));
     logs.push(
       makeLog({
         event: "info",
         step: 4,
         stepName: "Bundle Pack",
-        msg: `SUCCESS: .adaumc bundle created in ${processingTime}s`,
+        msg: `SUCCESS: Initial .adaumc bundle created in ${processingTime}s`,
         details: { processingTimeSec: processingTime, bundlePath },
       }),
     );
@@ -565,17 +482,28 @@ export async function importVideoFile(
       resolution: videoMeta.resolution,
       tags: [],
       bundlePath,
-      createdAt: new Date().toISOString(),
+      createdAt: fileCreatedAt,
       playCount: 0,
       fileSize: inputSizeBytes,
     };
 
+    // Save immediately so video appears in UI and is playable
     db.saveVideo(videoRecord);
     activeImportTasks.delete(videoId);
     activeImportFilePaths.delete(normPath);
     activeImportFilePaths.delete(fileKey);
 
-    broadcastProgress(4, 100, `Processing complete!`, 0);
+    // Queue background enrichment for Summary GIF & WebVTT Sprites
+    GLOBAL_DEFERRED_ASSET_QUEUE.enqueue({
+      videoId,
+      sourcePath: selectedPath,
+      bundlePath,
+      duration: videoMeta.duration,
+      codec: videoMeta.codec,
+      resolution: videoMeta.resolution,
+    });
+
+    broadcastProgress(4, 100, `Processing complete! Ready to play.`, 0, undefined, undefined, true);
     return videoRecord;
   } catch (error: any) {
     // Cleanup on error or cancellation
@@ -591,7 +519,7 @@ export async function importVideoFile(
     activeImportFilePaths.delete(normPath);
     activeImportFilePaths.delete(fileKey);
     try {
-      const tempDir = path.join(getUserDataDir(), `temp_${videoId}`);
+      const tempDir = getTempProcessingDir(videoId);
       if (fs.existsSync(tempDir)) {
         fs.rmSync(tempDir, { recursive: true, force: true });
       }
@@ -614,4 +542,3 @@ export async function importVideoFile(
     }
   }
 }
-
