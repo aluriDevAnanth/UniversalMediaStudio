@@ -1,4 +1,8 @@
-import { ipcMain } from "electron";
+let electronIpcMain: any = null;
+try {
+  const electron = require("electron");
+  electronIpcMain = electron?.ipcMain || electron?.default?.ipcMain || null;
+} catch {}
 import { db } from "./db";
 import { RecommendationEngine } from "../recommendation/engine";
 import { UserContext, Video } from "../recommendation/types";
@@ -38,8 +42,11 @@ function buildUserContext(state: Partial<UserContext> = {}): UserContext {
 }
 
 export function registerRecommendationApi(): void {
+  if (!electronIpcMain || typeof electronIpcMain.handle !== "function") {
+    return;
+  }
   // Get personalized recommendations
-  ipcMain.handle(
+  electronIpcMain.handle(
     "recommendations:get",
     async (_, params?: { videoId?: string; limit?: number; context?: Partial<UserContext> }) => {
       try {
@@ -57,7 +64,7 @@ export function registerRecommendationApi(): void {
   );
 
   // Get trending videos
-  ipcMain.handle(
+  electronIpcMain.handle(
     "recommendations:trending",
     async (_, params?: { limit?: number; context?: Partial<UserContext> }) => {
       try {
@@ -72,7 +79,7 @@ export function registerRecommendationApi(): void {
   );
 
   // Get "Because you watched" recommendations
-  ipcMain.handle(
+  electronIpcMain.handle(
     "recommendations:becauseYouWatched",
     async (_, params: { videoId: string; limit?: number; context?: Partial<UserContext> }) => {
       try {
@@ -90,7 +97,7 @@ export function registerRecommendationApi(): void {
   );
 
   // Get recommendations by tags
-  ipcMain.handle(
+  electronIpcMain.handle(
     "recommendations:byTags",
     async (_, params: { tags: string[]; limit?: number }) => {
       try {
