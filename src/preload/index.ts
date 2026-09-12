@@ -125,6 +125,9 @@ const api = {
       return (file as any).path || "";
     },
   },
+  storage: {
+    cleanOrphans: () => ipcRenderer.invoke("storage:cleanOrphans"),
+  },
   windowControls: {
     minimize: () => ipcRenderer.send("window:minimize"),
     maximize: () => ipcRenderer.send("window:maximize"),

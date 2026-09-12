@@ -13,6 +13,7 @@ import { registerRecommendationApi } from "./recommendationApi";
 import { db } from "./db";
 import { importVideoFile, cancelActiveImport } from "./random_video";
 import { BundleManager } from "./bundle_manager";
+import { storageCleaner } from "./storage_cleaner";
 
 // Stable Chromium GPU Switches
 app.commandLine.appendSwitch("enable-features", "HardwareMediaKeyHandling,MediaFoundationRender");
@@ -85,7 +86,10 @@ function createWindow(): void {
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  // Initialize and unlock encrypted SQLite database container
+  await db.initialize();
+
   // Register adaumc:// custom protocol handler
   registerAdaumcProtocol();
   // Register recommendation API
@@ -396,11 +400,22 @@ app.whenReady().then(() => {
     }
   });
 
+  ipcMain.handle("storage:cleanOrphans", async () => {
+    return await storageCleaner.cleanOrphansNow();
+  });
+
+  // Start periodic background orphan storage cleaner (runs non-blocking every 60s)
+  storageCleaner.start(60_000);
+
   createWindow();
 
   app.on("activate", function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+app.on("before-quit", () => {
+  storageCleaner.stop();
 });
 
 app.on("window-all-closed", () => {
