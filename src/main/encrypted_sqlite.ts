@@ -87,6 +87,16 @@ const MIGRATIONS: SchemaMigration[] = [
   },
 ];
 
+export function getDefaultMachineKey(): string {
+  const os = require("os");
+  let user = "default_user";
+  try {
+    user = os.userInfo().username || "default_user";
+  } catch {}
+  const machineData = `${os.hostname()}-${user}-${os.platform()}-${os.arch()}-UniversalMediaStudioVaultKey_v1`;
+  return crypto.createHash("sha256").update(machineData).digest("hex");
+}
+
 export class EncryptedSQLiteEngine {
   private filePath: string;
   private SQL: SqlJsStatic | null = null;
@@ -107,7 +117,56 @@ export class EncryptedSQLiteEngine {
 
   public async initialize(): Promise<void> {
     if (!this.SQL) {
-      this.SQL = await initSqlJs();
+      let wasmBuffer: Buffer | null = null;
+      let wasmPath: string | null = null;
+
+      const candidates: string[] = [];
+
+      try {
+        candidates.push(require.resolve("sql.js/dist/sql-wasm.wasm"));
+      } catch {}
+
+      candidates.push(
+        path.join(__dirname, "sql-wasm.wasm"),
+        path.join(process.cwd(), "node_modules", "sql.js", "dist", "sql-wasm.wasm"),
+        path.join(process.cwd(), "out", "main", "sql-wasm.wasm"),
+      );
+
+      if (typeof process !== "undefined" && (process as any).resourcesPath) {
+        candidates.push(
+          path.join((process as any).resourcesPath, "sql-wasm.wasm"),
+          path.join(
+            (process as any).resourcesPath,
+            "app.asar.unpacked",
+            "node_modules",
+            "sql.js",
+            "dist",
+            "sql-wasm.wasm",
+          ),
+        );
+      }
+
+      for (const p of candidates) {
+        if (p && fs.existsSync(p)) {
+          try {
+            wasmBuffer = fs.readFileSync(p);
+            wasmPath = p;
+            break;
+          } catch {}
+        }
+      }
+
+      if (wasmBuffer) {
+        this.SQL = await initSqlJs({
+          wasmBinary: wasmBuffer.buffer.slice(
+            wasmBuffer.byteOffset,
+            wasmBuffer.byteOffset + wasmBuffer.byteLength,
+          ) as ArrayBuffer,
+          locateFile: () => wasmPath || "sql-wasm.wasm",
+        });
+      } else {
+        this.SQL = await initSqlJs();
+      }
     }
   }
 
@@ -116,16 +175,41 @@ export class EncryptedSQLiteEngine {
   }
 
   public hasMasterPassword(): boolean {
+    return this.hasCustomMasterPassword();
+  }
+
+  public hasCustomMasterPassword(): boolean {
     if (!this.exists()) return false;
-    try {
-      const fd = fs.openSync(this.filePath, "r");
-      const header = Buffer.alloc(MAGIC_HEADER.length);
-      fs.readSync(fd, header, 0, MAGIC_HEADER.length, 0);
-      fs.closeSync(fd);
-      return header.equals(MAGIC_HEADER);
-    } catch {
-      return false;
+    if (this.isUnlocked() && this.db) {
+      return this.readCustomPasswordFlag(this.db);
     }
+    if (this.SQL) {
+      try {
+        const fileBuffer = fs.readFileSync(this.filePath);
+        const defaultPass = getDefaultMachineKey();
+        const decrypted = this.decryptBufferWithKey(fileBuffer, defaultPass);
+        if (decrypted) {
+          const hasCustom = this.readCustomPasswordFlag(decrypted.db);
+          decrypted.db.close();
+          return hasCustom;
+        }
+      } catch {}
+    }
+    return true;
+  }
+
+  private readCustomPasswordFlag(db: SqlJsDatabase): boolean {
+    try {
+      const stmt = db.prepare("SELECT value FROM app_state WHERE key = ?");
+      stmt.bind(["has_custom_password"]);
+      if (stmt.step()) {
+        const row = stmt.getAsObject() as { value: string };
+        stmt.free();
+        return row.value === "1";
+      }
+      stmt.free();
+    } catch {}
+    return false;
   }
 
   public isUnlocked(): boolean {
@@ -139,38 +223,18 @@ export class EncryptedSQLiteEngine {
     return this.db;
   }
 
-  /**
-   * Unlock or initialize encrypted database with the master password.
-   * If database does not exist, a new encrypted database is initialized.
-   */
-  public async unlockWithPassword(password: string): Promise<boolean> {
-    await this.initialize();
-    if (!this.SQL) throw new Error("SQL.js initialization failed");
-
-    if (!this.exists()) {
-      // First time initialization: create new database and encrypt
-      const salt = crypto.randomBytes(SALT_LEN);
-      const key = crypto.pbkdf2Sync(password, salt, PBKDF2_ITERATIONS, KEY_LEN, "sha512");
-      this.currentSalt = salt;
-      this.currentKey = key;
-
-      this.db = new this.SQL.Database();
-      this.runMigrations();
-      this.initDefaultPlaylists();
-      this.saveEncrypted();
-      this.isUnlockedState = true;
-      return true;
-    }
-
-    // Read and decrypt existing database
-    const fileBuffer = fs.readFileSync(this.filePath);
+  private decryptBufferWithKey(
+    fileBuffer: Buffer,
+    password: string,
+  ): { db: SqlJsDatabase; salt: Buffer; key: Buffer } | null {
+    if (!this.SQL) return null;
     if (fileBuffer.length < MAGIC_HEADER.length + SALT_LEN + IV_LEN + TAG_LEN) {
-      throw new Error("Invalid or corrupted encrypted database file.");
+      return null;
     }
 
     const magic = fileBuffer.subarray(0, MAGIC_HEADER.length);
     if (!magic.equals(MAGIC_HEADER)) {
-      throw new Error("Invalid encrypted database header.");
+      return null;
     }
 
     let offset = MAGIC_HEADER.length;
@@ -188,18 +252,132 @@ export class EncryptedSQLiteEngine {
       const decipher = crypto.createDecipheriv("aes-256-gcm", derivedKey, iv);
       decipher.setAuthTag(tag);
       const decryptedSQLiteBinary = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+      const sqlDb = new this.SQL.Database(decryptedSQLiteBinary);
+      return { db: sqlDb, salt, key: derivedKey };
+    } catch {
+      return null;
+    }
+  }
 
+  /**
+   * Automatically initializes or unlocks the encrypted SQLite database.
+   * If brand new, initializes with default machine key (has_custom_password = 0).
+   * If existing without custom password, unlocks immediately with machine key.
+   */
+  public async autoInitialize(): Promise<boolean> {
+    await this.initialize();
+    if (!this.SQL) throw new Error("SQL.js initialization failed");
+
+    if (!this.exists()) {
+      const defaultPass = getDefaultMachineKey();
+      const salt = crypto.randomBytes(SALT_LEN);
+      const key = crypto.pbkdf2Sync(defaultPass, salt, PBKDF2_ITERATIONS, KEY_LEN, "sha512");
       this.currentSalt = salt;
-      this.currentKey = derivedKey;
-      this.db = new this.SQL.Database(decryptedSQLiteBinary);
+      this.currentKey = key;
+
+      this.db = new this.SQL.Database();
+      this.runMigrations();
+      this.initDefaultPlaylists();
+      this.db.run("INSERT OR REPLACE INTO app_state (key, value) VALUES (?, ?)", [
+        "has_custom_password",
+        "0",
+      ]);
+      this.saveEncrypted();
+      this.isUnlockedState = true;
+      return true;
+    }
+
+    const fileBuffer = fs.readFileSync(this.filePath);
+    const defaultPass = getDefaultMachineKey();
+    const decrypted = this.decryptBufferWithKey(fileBuffer, defaultPass);
+
+    if (decrypted) {
+      const hasCustom = this.readCustomPasswordFlag(decrypted.db);
+      if (!hasCustom) {
+        this.db = decrypted.db;
+        this.currentSalt = decrypted.salt;
+        this.currentKey = decrypted.key;
+        this.runMigrations();
+        this.initDefaultPlaylists();
+        this.isUnlockedState = true;
+        return true;
+      } else {
+        decrypted.db.close();
+        this.isUnlockedState = false;
+        return false;
+      }
+    }
+
+    this.isUnlockedState = false;
+    return false;
+  }
+
+  /**
+   * Unlock or initialize encrypted database with a custom master password.
+   */
+  public async unlockWithPassword(password: string): Promise<boolean> {
+    await this.initialize();
+    if (!this.SQL) throw new Error("SQL.js initialization failed");
+
+    if (!this.exists()) {
+      return this.setCustomMasterPassword(password);
+    }
+
+    const fileBuffer = fs.readFileSync(this.filePath);
+    const decrypted = this.decryptBufferWithKey(fileBuffer, password);
+    if (decrypted) {
+      if (this.db) {
+        try {
+          this.db.close();
+        } catch {}
+      }
+      this.db = decrypted.db;
+      this.currentSalt = decrypted.salt;
+      this.currentKey = decrypted.key;
       this.runMigrations();
       this.initDefaultPlaylists();
       this.isUnlockedState = true;
       return true;
-    } catch {
-      // GCM authentication failed -> Wrong password or tampered ciphertext
-      return false;
     }
+
+    return false;
+  }
+
+  /**
+   * Sets or upgrades database encryption to a custom user master password.
+   */
+  public async setCustomMasterPassword(password: string): Promise<boolean> {
+    await this.initialize();
+    if (!this.SQL) throw new Error("SQL.js initialization failed");
+
+    if (!this.db) {
+      if (this.exists()) {
+        const fileBuffer = fs.readFileSync(this.filePath);
+        const defaultPass = getDefaultMachineKey();
+        const decrypted = this.decryptBufferWithKey(fileBuffer, defaultPass);
+        if (decrypted) {
+          this.db = decrypted.db;
+        }
+      }
+      if (!this.db) {
+        this.db = new this.SQL.Database();
+      }
+      this.runMigrations();
+      this.initDefaultPlaylists();
+    }
+
+    this.db.run("INSERT OR REPLACE INTO app_state (key, value) VALUES (?, ?)", [
+      "has_custom_password",
+      "1",
+    ]);
+
+    const newSalt = crypto.randomBytes(SALT_LEN);
+    const newKey = crypto.pbkdf2Sync(password, newSalt, PBKDF2_ITERATIONS, KEY_LEN, "sha512");
+    this.currentSalt = newSalt;
+    this.currentKey = newKey;
+    this.isUnlockedState = true;
+    this.saveEncrypted();
+    return true;
   }
 
   /**
