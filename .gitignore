@@ -217,3 +217,7 @@ vite.config.ts.timestamp-*
 
 # Plans & Documentation drafts
 .plans/
+
+# Performance and Benchmark Reports
+perf_reports/
+reports/
