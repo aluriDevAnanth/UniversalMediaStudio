@@ -28,14 +28,58 @@ describe("Database & Local Store Operations", () => {
     expect(playlists.some((p) => p.id === "favourite")).toBe(true);
   });
 
-  it("should set and verify master password with bcrypt", () => {
+  it("should set and verify master password with bcrypt and encrypted SQLite", async () => {
     expect(db.isPasswordSet()).toBe(false);
-    expect(db.verifyMasterPassword("WrongPass")).toBe(false);
+    expect(await db.verifyMasterPassword("WrongPass")).toBe(false);
 
-    db.setMasterPassword("Secret123!");
+    await db.setMasterPassword("Secret123!");
     expect(db.isPasswordSet()).toBe(true);
-    expect(db.verifyMasterPassword("Secret123!")).toBe(true);
-    expect(db.verifyMasterPassword("WrongPass")).toBe(false);
+    expect(await db.verifyMasterPassword("Secret123!")).toBe(true);
+    expect(await db.verifyMasterPassword("WrongPass")).toBe(false);
+  });
+
+  it("should persist and reload library from encrypted SQLite container", async () => {
+    const encTempDir = fs.mkdtempSync(path.join(os.tmpdir(), "db_enc_reload_"));
+    const encDbPath = path.join(encTempDir, "database.sqlite.enc");
+    try {
+      const encDb1 = new Database(encDbPath);
+      await encDb1.setMasterPassword("MasterKeyVault2026!");
+
+      encDb1.saveVideo({
+        id: "vid_enc_1",
+        title: "Encrypted Universe Video",
+        duration: 250,
+        resolution: "1920x1080",
+        tags: ["Sci-Fi:Space"],
+        bundlePath: "/bundles/universe.adaumc",
+        createdAt: new Date().toISOString(),
+        playCount: 4,
+      });
+
+      encDb1.createPlaylist("Favorites Collection");
+
+      // Verify on-disk file is encrypted
+      expect(fs.existsSync(encDbPath)).toBe(true);
+      const rawBytes = fs.readFileSync(encDbPath);
+      expect(rawBytes.subarray(0, 8).toString("utf-8")).toBe("ADAUSQL1");
+
+      // Simulate app restart with a fresh Database instance
+      const encDb2 = new Database(encDbPath);
+      expect(encDb2.isPasswordSet()).toBe(true);
+      
+      // Before unlock, memory hasn't decrypted records
+      const unlockSuccess = await encDb2.verifyMasterPassword("MasterKeyVault2026!");
+      expect(unlockSuccess).toBe(true);
+
+      const restoredVid = encDb2.getVideo("vid_enc_1");
+      expect(restoredVid).toBeDefined();
+      expect(restoredVid?.title).toBe("Encrypted Universe Video");
+      expect(restoredVid?.playCount).toBe(4);
+      expect(encDb2.getTags()).toContain("Sci-Fi:Space");
+      expect(encDb2.getPlaylists().some((p) => p.name === "Favorites Collection")).toBe(true);
+    } finally {
+      fs.rmSync(encTempDir, { recursive: true, force: true });
+    }
   });
 
   it("should perform video CRUD operations properly", () => {

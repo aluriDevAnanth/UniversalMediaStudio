@@ -110,4 +110,54 @@ describe("Encrypted SQLite Engine & Zero-Knowledge Security", () => {
     expect(res[0].values.length).toBeGreaterThanOrEqual(1);
     expect(res[0].values[0][1]).toBe("initial_schema");
   });
+
+  it("should auto-initialize with machine key and seamlessly upgrade to custom master password", async () => {
+    const engine = new EncryptedSQLiteEngine(dbFilePath);
+    expect(engine.exists()).toBe(false);
+
+    // Auto-initialize on first run without password
+    const autoUnlocked = await engine.autoInitialize();
+    expect(autoUnlocked).toBe(true);
+    expect(engine.isUnlocked()).toBe(true);
+    expect(engine.exists()).toBe(true);
+    expect(engine.hasCustomMasterPassword()).toBe(false);
+
+    // Insert sample video record under machine key
+    const rawDb = engine.getRawDb();
+    rawDb.run(
+      "INSERT INTO videos (id, title, duration, resolution, tags, bundle_path, created_at, play_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      ["vid_machine_1", "Machine Key Encrypted Video", 180, "1080p", JSON.stringify(["Default"]), "/bundles/machine.adaumc", new Date().toISOString(), 1]
+    );
+    engine.saveEncrypted();
+
+    // Reopen with fresh engine instance - should auto-unlock with machine key
+    const restartEngine = new EncryptedSQLiteEngine(dbFilePath);
+    expect(restartEngine.isUnlocked()).toBe(false);
+    const restartUnlocked = await restartEngine.autoInitialize();
+    expect(restartUnlocked).toBe(true);
+    expect(restartEngine.isUnlocked()).toBe(true);
+    expect(restartEngine.hasCustomMasterPassword()).toBe(false);
+
+    // Upgrade to custom master password
+    await restartEngine.setCustomMasterPassword("NewMasterPassword!2026");
+    expect(restartEngine.hasCustomMasterPassword()).toBe(true);
+
+    // After setting custom password, auto-initialize should NOT unlock automatically
+    const lockedEngine = new EncryptedSQLiteEngine(dbFilePath);
+    const lockedAuto = await lockedEngine.autoInitialize();
+    expect(lockedAuto).toBe(false);
+    expect(lockedEngine.isUnlocked()).toBe(false);
+    expect(lockedEngine.hasCustomMasterPassword()).toBe(true);
+
+    // Entering custom password unlocks successfully
+    const finalUnlock = await lockedEngine.unlockWithPassword("NewMasterPassword!2026");
+    expect(finalUnlock).toBe(true);
+    expect(lockedEngine.isUnlocked()).toBe(true);
+
+    const stmt = lockedEngine.getRawDb().prepare("SELECT title FROM videos WHERE id = ?");
+    stmt.bind(["vid_machine_1"]);
+    expect(stmt.step()).toBe(true);
+    expect(stmt.getAsObject().title).toBe("Machine Key Encrypted Video");
+    stmt.free();
+  });
 });
