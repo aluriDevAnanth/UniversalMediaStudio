@@ -172,6 +172,16 @@ export interface IElectronAPI {
   webUtils: {
     getPathForFile: (file: File) => string;
   };
+  storage: {
+    cleanOrphans: () => Promise<{
+      success: boolean;
+      deletedBundles: string[];
+      deletedTempDirs: string[];
+      deletedCount: number;
+      freedBytes: number;
+      errors: string[];
+    }>;
+  };
   windowControls: {
     minimize: () => void;
     maximize: () => void;
