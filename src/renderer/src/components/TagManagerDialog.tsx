@@ -95,31 +95,30 @@ export const TagManagerDialog: React.FC<TagManagerDialogProps> = ({
 
   return (
     <div
-      className="animate-fade-in fixed inset-0 z-100 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-2xl"
+      className="animate-fade-in fixed inset-0 z-100 flex items-center justify-center bg-slate-950/70 p-2 sm:p-4 backdrop-blur-2xl"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="glass-modal flex h-[90vh] max-h-[90vh] w-[92vw] flex-col overflow-hidden rounded-2xl">
+      <div className="glass-modal flex h-[92vh] max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl">
         {/* Dialog Header */}
-        <div className="border-border/60 bg-background/50 backdrop-blur-sm flex items-center justify-between border-b px-4 py-3">
-          <div className="flex items-center gap-2.5">
-            <div className="bg-primary/15 text-primary-text border-primary/25 flex h-8 w-8 items-center justify-center rounded-lg border">
+        <div className="border-border/60 bg-background/50 backdrop-blur-sm flex items-center justify-between border-b px-3 sm:px-4 py-2.5 sm:py-3">
+          <div className="flex items-center gap-2.5 min-w-0 mr-2">
+            <div className="bg-primary/15 text-primary-text border-primary/25 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border">
               <Tag className="h-4 w-4" />
             </div>
-            <div>
-              <h2 className="text-foreground text-sm font-bold tracking-tight">
+            <div className="min-w-0">
+              <h2 className="text-foreground text-xs sm:text-sm font-bold tracking-tight truncate">
                 Taxonomy & Tag Manager
               </h2>
-              <p className="text-muted text-[11px]">
-                Organize, color-code, and manage all taxonomy categories and
-                tags across your library
+              <p className="text-muted text-[10px] sm:text-[11px] truncate">
+                Organize and color-code taxonomy categories & tags
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-muted hover:bg-surface-hover hover:text-foreground cursor-pointer rounded-lg p-1.5 transition"
+            className="text-muted hover:bg-surface-hover hover:text-foreground shrink-0 cursor-pointer rounded-lg p-1.5 transition"
             title="Close (Esc)"
           >
             <X className="h-4 w-4" />
@@ -139,10 +138,10 @@ export const TagManagerDialog: React.FC<TagManagerDialogProps> = ({
               setNewNameInput("");
             }
           }}
-          className="border-border bg-background/40 flex flex-wrap items-center gap-2.5 border-b px-4 py-2.5"
+          className="border-border bg-background/40 flex flex-wrap items-center gap-2 border-b p-2 sm:px-4 sm:py-2.5"
         >
           {/* Category Combobox */}
-          <div ref={catComboboxRef} className="relative w-48 shrink-0">
+          <div ref={catComboboxRef} className="relative w-full sm:w-40 md:w-48 shrink-0">
             <div className="border-border bg-background focus-within:border-primary focus-within:ring-primary/30 flex items-center justify-between rounded-lg border px-2.5 py-1.5 transition focus-within:ring-1">
               <input
                 type="text"
@@ -200,20 +199,20 @@ export const TagManagerDialog: React.FC<TagManagerDialogProps> = ({
             )}
           </div>
 
-          <span className="text-muted text-xs font-bold">:</span>
+          <span className="text-muted text-xs font-bold hidden sm:inline">:</span>
 
           {/* Tag Name Input */}
           <input
             type="text"
             value={newNameInput}
             onChange={(e) => setNewNameInput(e.target.value)}
-            placeholder="New tag name (e.g. 4K, Synthwave)..."
-            className="border-border bg-background text-foreground placeholder-muted/60 focus:border-primary focus:ring-primary/30 min-w-44 flex-1 rounded-lg border px-3 py-1.5 text-xs transition focus:ring-1 focus:outline-none"
+            placeholder="New tag name..."
+            className="border-border bg-background text-foreground placeholder-muted/60 focus:border-primary focus:ring-primary/30 min-w-[120px] flex-1 rounded-lg border px-3 py-1.5 text-xs transition focus:ring-1 focus:outline-none"
           />
 
           {/* Color Selector */}
           <div className="bg-background/60 border-border/80 flex shrink-0 items-center gap-1.5 rounded-lg border px-2 py-1">
-            <span className="text-muted mr-0.5 text-[10px] font-semibold tracking-wider uppercase">
+            <span className="text-muted mr-0.5 text-[10px] font-semibold tracking-wider uppercase hidden sm:inline">
               Color:
             </span>
             {PRESET_TAG_COLORS.slice(0, 6).map((c) => (
@@ -270,18 +269,18 @@ export const TagManagerDialog: React.FC<TagManagerDialogProps> = ({
         </form>
 
         {/* Filter & Search Bar */}
-        <div className="border-border/70 bg-background/30 flex items-center justify-between border-b px-2 py-1">
+        <div className="border-border/70 bg-background/30 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b px-2 sm:px-3 py-1.5 sm:py-2">
           <div className="flex items-center gap-2">
-            <span className="text-muted text-xs font-bold tracking-wider uppercase">
-              Taxonomy Categories ({categories.length})
+            <span className="text-muted text-[11px] sm:text-xs font-bold tracking-wider uppercase">
+              Categories ({categories.length})
             </span>
             <span className="text-muted bg-surface/80 border-border/80 rounded-full border px-2 py-0.5 text-[10px] font-medium">
-              {tags.length} registered tags
+              {tags.length} tags
             </span>
           </div>
 
           {/* Search Input */}
-          <div className="relative w-64">
+          <div className="relative w-full sm:w-64">
             <Search className="text-muted pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2" />
             <input
               type="text"

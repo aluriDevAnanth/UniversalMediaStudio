@@ -57,7 +57,7 @@ export const TagDropdown: React.FC<TagDropdownProps> = ({
       if (!triggerRef.current) return;
       const rect = triggerRef.current.getBoundingClientRect();
       const panelHeight = 340;
-      const panelWidth = 280;
+      const panelWidth = Math.min(280, window.innerWidth - 16);
 
       let top = rect.bottom + 6;
       if (
@@ -67,10 +67,7 @@ export const TagDropdown: React.FC<TagDropdownProps> = ({
         top = Math.max(10, rect.top - panelHeight - 6);
       }
 
-      let left = rect.left;
-      if (window.innerWidth - rect.left < panelWidth) {
-        left = Math.max(10, rect.right - panelWidth);
-      }
+      let left = Math.max(8, Math.min(rect.left, window.innerWidth - panelWidth - 8));
 
       setPortalCoords({ top, left });
     };
@@ -250,7 +247,8 @@ export const TagDropdown: React.FC<TagDropdownProps> = ({
               position: "fixed",
               top: portalCoords.top,
               left: portalCoords.left,
-              width: 280,
+              width: Math.min(280, window.innerWidth - 16),
+              maxWidth: "calc(100vw - 16px)",
               zIndex: 9999,
             }}
             className="bg-surface border-border animate-fade-in flex flex-col overflow-hidden rounded-xl border shadow-2xl"

@@ -108,7 +108,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({ video }) => {
             className={`absolute left-2 top-2 z-10 flex h-5 w-5 cursor-pointer items-center justify-center rounded-md border transition backdrop-blur-sm ${
               isMultiSelected
                 ? "border-primary bg-primary text-white shadow-md"
-                : "border-white/30 bg-black/50 text-transparent opacity-0 group-hover:opacity-100"
+                : "border-white/40 bg-black/40 text-transparent opacity-60 sm:opacity-0 sm:group-hover:opacity-100"
             }`}
             title={
               isMultiSelected

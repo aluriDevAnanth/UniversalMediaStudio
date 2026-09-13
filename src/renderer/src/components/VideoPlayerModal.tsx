@@ -562,19 +562,19 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
       }}
       className="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/80 px-2 py-3 backdrop-blur-2xl"
     >
-      <div className="bg-surface/85 border-border/80 relative flex h-full w-full max-w-[90vw] flex-col overflow-hidden rounded-2xl border shadow-2xl backdrop-blur-xl">
+      <div className="bg-surface/85 border-border/80 relative flex h-full max-h-[96vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border shadow-2xl backdrop-blur-xl">
         {/* Header */}
         <div className="border-border/70 bg-background/60 relative z-30 shrink-0 flex items-center justify-between border-b px-3 py-2 backdrop-blur-md">
-          <div className="flex items-center gap-3">
-            <span className="bg-primary/20 text-primary-text border-primary-border/40 rounded border px-2 py-0.5 text-xs font-bold backdrop-blur-xs">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 mr-2">
+            <span className="bg-primary/20 text-primary-text border-primary-border/40 shrink-0 rounded border px-2 py-0.5 text-[11px] sm:text-xs font-bold backdrop-blur-xs">
               ADAUMC Player
             </span>
-            <h2 className="text-foreground max-w-xl truncate text-base font-bold">
+            <h2 className="text-foreground truncate text-sm sm:text-base font-bold">
               {currentVideo.title}
             </h2>
           </div>
 
-          <div className="relative z-30 flex items-center gap-2 pointer-events-auto">
+          <div className="relative z-30 flex items-center gap-1.5 sm:gap-2 shrink-0 pointer-events-auto">
             <button
               type="button"
               onClick={() => setShortcutsOpen(true)}
@@ -588,14 +588,14 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
               type="button"
               onClick={() => setShowLogs(!showLogs)}
               title="Container Telemetry Logs (~ or `)"
-              className={`flex cursor-pointer items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition pointer-events-auto ${
+              className={`flex cursor-pointer items-center gap-1.5 rounded-xl border px-2.5 sm:px-3 py-1.5 text-xs font-semibold transition pointer-events-auto ${
                 showLogs
                   ? "bg-primary border-primary-border text-white"
                   : "bg-surface hover:bg-surface-hover text-muted border-border hover:text-foreground"
               }`}
             >
               <Terminal className="h-3.5 w-3.5" />
-              {showLogs ? "Hide Logs" : "Bundle Logs"}
+              <span className="hidden sm:inline">{showLogs ? "Hide Logs" : "Bundle Logs"}</span>
             </button>
 
             <button
@@ -627,7 +627,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           onDragOver={handlePlayerDragOver}
           onDragLeave={handlePlayerDragLeave}
           onDrop={handlePlayerDrop}
-          className="relative flex aspect-video h-[75vh] w-full items-center justify-center overflow-hidden bg-black"
+          className="relative flex flex-1 min-h-[220px] max-h-[65vh] w-full items-center justify-center overflow-hidden bg-black"
         >
           {/* Player Subtitle Drag Hover Overlay */}
           {isPlayerDragHovered && (
@@ -730,13 +730,13 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         </div>
 
         {/* Bottom Details, Subtitles & Tag Manager */}
-        <div className="space-y-4 overflow-y-auto p-6">
-          <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="space-y-3 overflow-y-auto p-3 sm:p-5 shrink-0">
+          <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-4">
             <div>
-              <h3 className="text-foreground text-lg font-bold">
+              <h3 className="text-foreground text-sm sm:text-base font-bold">
                 {currentVideo.title}
               </h3>
-              <p className="text-muted mt-1 text-xs">
+              <p className="text-muted mt-0.5 text-xs">
                 Resolution: {currentVideo.resolution} • Duration:{" "}
                 {Math.floor(currentVideo.duration / 60)}m{" "}
                 {Math.floor(currentVideo.duration % 60)}s • Created:{" "}
