@@ -13,12 +13,12 @@ export const AnalyticsView: React.FC = () => {
   const maxTagCount = Math.max(...Object.values(tagDist), 1);
 
   return (
-    <div className="flex-1 overflow-y-auto space-y-6 py-2 px-4 mx-auto w-full">
+    <div className="flex-1 overflow-y-auto space-y-4 md:space-y-6 py-2 px-2 md:px-4 mx-auto w-full">
       {/* Title */}
       <div className="border-b border-border pb-4">
-        <h2 className="text-2xl font-bold text-foreground flex items-center gap-3">
-          <BarChart3 className="w-6 h-6 text-primary-text" />
-          Application & Media Telemetry Analytics
+        <h2 className="text-lg md:text-2xl font-bold text-foreground flex items-center gap-2 md:gap-3">
+          <BarChart3 className="w-5 h-5 md:w-6 md:h-6 text-primary-text shrink-0" />
+          <span>Application & Media Telemetry Analytics</span>
         </h2>
         <p className="text-xs text-muted mt-1">
           Real-time insights into video playback counts, tag frequency
@@ -27,7 +27,7 @@ export const AnalyticsView: React.FC = () => {
       </div>
 
       {/* Metrics Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
         <div className="bg-surface border border-border rounded-2xl p-5">
           <div className="flex items-center justify-between text-muted">
             <span className="text-xs font-semibold uppercase">

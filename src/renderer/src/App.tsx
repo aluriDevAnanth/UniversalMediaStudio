@@ -13,6 +13,7 @@ import { BundleExplorerModal } from "./components/BundleExplorerModal";
 import { TagManagerDialog } from "./components/TagManagerDialog";
 import { ShortcutsModal } from "./components/ShortcutsModal";
 import { ToastContainer, showToast } from "./components/ToastNotification";
+import { MobileBottomNav } from "./components/MobileBottomNav";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { VideoRecord } from "./env";
 import { Upload } from "lucide-react";
@@ -357,6 +358,9 @@ export default function App(): React.JSX.Element {
           />
         )}
       </main>
+
+      {/* Mobile & Foldable Bottom Navigation */}
+      <MobileBottomNav onOpenTagManager={() => setTagManagerOpen(true)} />
 
       {/* Video Player Modal */}
       {playingVideo && (

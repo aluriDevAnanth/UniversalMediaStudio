@@ -54,9 +54,9 @@ export const BulkTaggingToolbar: React.FC = () => {
   if (selectedVideoIds.length === 0) return null;
 
   return (
-    <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-2xl border border-border/80 bg-surface/95 px-4 py-2.5 shadow-2xl backdrop-blur-xl animate-in slide-in-from-bottom-6 duration-200">
+    <div className="fixed bottom-16 md:bottom-6 left-1/2 z-50 flex max-w-[95vw] -translate-x-1/2 items-center gap-1.5 sm:gap-3 overflow-x-auto rounded-2xl border border-border/80 bg-surface/95 px-2.5 sm:px-4 py-2 sm:py-2.5 shadow-2xl backdrop-blur-xl animate-in slide-in-from-bottom-6 duration-200">
       {/* Count & Select All */}
-      <div className="flex items-center gap-2 border-r border-border/60 pr-3">
+      <div className="flex items-center gap-1 sm:gap-2 border-r border-border/60 pr-2 sm:pr-3">
         <button
           onClick={() => {
             if (allSelected) {
