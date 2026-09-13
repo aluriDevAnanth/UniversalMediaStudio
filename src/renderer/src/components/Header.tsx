@@ -49,11 +49,11 @@ export const Header: React.FC = () => {
     <header className="glass-header sticky top-0 z-40 px-2 transition-colors duration-200">
       {/* Single Row: Logo | Search + Tags | Actions | Window controls */}
       <div
-        className="flex items-center gap-3 py-2"
+        className="flex items-center gap-2 sm:gap-3 py-2"
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
       >
         {/* Logo */}
-        <div className="flex shrink-0 items-center gap-2.5">
+        <div className="flex shrink-0 items-center gap-2">
           <div className="border-primary-border/30 bg-primary/20 flex h-8 w-8 items-center justify-center overflow-hidden rounded-xl border shadow-md backdrop-blur-xs">
             <img
               src={appIcon}
@@ -61,35 +61,35 @@ export const Header: React.FC = () => {
               className="h-full w-full object-cover"
             />
           </div>
-          <h1 className="text-foreground flex items-end text-sm font-bold tracking-tight">
+          <h1 className="text-foreground hidden sm:flex items-end text-xs md:text-sm font-bold tracking-tight">
             UniversalMediaStudio
-            <span className="text-primary font-bolder text-[12px]">
+            <span className="text-primary font-bolder text-[11px] md:text-[12px]">
               .adaumc
             </span>
           </h1>
         </div>
 
-        {/* Search + Tag Dropdown */}
+        {/* Search + Tag Dropdown + Sort Dropdown */}
         <div
-          className="flex min-w-0 flex-1 items-center gap-2"
+          className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2"
           style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
         >
-          {/* Search */}
-          <div className="relative w-64 shrink-0">
+          {/* Fluid Search */}
+          <div className="relative min-w-[100px] flex-1 max-w-xs">
             <Search className="text-muted pointer-events-none absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2" />
             <input
               ref={searchInputRef}
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search or #Category:Tag... (Ctrl+K or /)"
-              className="glass-input text-foreground placeholder-muted focus:border-primary w-full rounded-xl py-1.5 pr-8 pl-9 text-xs transition focus:outline-none"
+              placeholder="Search or #Cat:Tag..."
+              className="glass-input text-foreground placeholder-muted focus:border-primary w-full rounded-xl py-1.5 pr-7 pl-8.5 text-xs transition focus:outline-none"
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery("")}
-                className="text-muted hover:text-foreground absolute top-1/2 right-2.5 -translate-y-1/2 p-0.5"
+                className="text-muted hover:text-foreground absolute top-1/2 right-2 -translate-y-1/2 p-0.5"
                 title="Clear search (Esc)"
               >
                 <X className="h-3 w-3" />
@@ -112,13 +112,13 @@ export const Header: React.FC = () => {
 
         {/* Action Buttons + Window Controls */}
         <div
-          className="flex shrink-0 items-center gap-1.5"
+          className="flex shrink-0 items-center gap-1 sm:gap-1.5"
           style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
         >
           <button
             onClick={() => importVideoFile()}
             title="Import Video File (Ctrl+O)"
-            className="hover:bg-primary/90 bg-primary flex cursor-pointer items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold text-white shadow-md transition hover:scale-[1.02] active:scale-[0.98]"
+            className="hover:bg-primary/90 bg-primary hidden md:flex cursor-pointer items-center gap-1.5 rounded-xl px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-white shadow-md transition hover:scale-[1.02] active:scale-[0.98]"
           >
             <Upload className="h-3.5 w-3.5" />
             <span>Import</span>
@@ -128,7 +128,7 @@ export const Header: React.FC = () => {
           <button
             onClick={toggleShortcutsOpen}
             title="Keyboard Shortcuts (? or Ctrl+/)"
-            className="glass-pill text-muted hover:bg-surface-hover hover:text-foreground cursor-pointer rounded-xl p-1.5 transition shadow-2xs"
+            className="glass-pill text-muted hover:bg-surface-hover hover:text-foreground hidden sm:flex cursor-pointer rounded-xl p-1.5 transition shadow-2xs"
           >
             <Keyboard className="h-3.5 w-3.5" />
           </button>
@@ -159,7 +159,7 @@ export const Header: React.FC = () => {
           </button>
 
           {/* Window controls */}
-          <div className="border-border flex items-center gap-0.5 border-l pl-2">
+          <div className="border-border flex items-center gap-0.5 border-l pl-1 sm:pl-2">
             <button
               onClick={handleMinimize}
               title="Minimize Window"

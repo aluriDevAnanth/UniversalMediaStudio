@@ -122,21 +122,21 @@ export const BundleExplorerModal: React.FC<BundleExplorerModalProps> = ({
   const activeAssetInfo = assetsMap[selectedAssetKey];
 
   return (
-    <div className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 p-4 backdrop-blur-md md:p-8">
-      <div className="bg-surface border-border flex h-[85vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border shadow-2xl transition-colors duration-200">
+    <div className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 p-2 sm:p-4 md:p-6 backdrop-blur-md">
+      <div className="bg-surface border-border flex h-[90vh] max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border shadow-2xl transition-colors duration-200">
         {/* Header */}
-        <div className="border-border bg-background/60 flex items-center justify-between border-b p-2">
-          <div className="flex items-center gap-3">
-            <span className="bg-primary/20 text-primary-text border-primary-border/40 flex animate-pulse items-center gap-1.5 rounded-lg border px-2.5 py-1 font-mono text-xs font-bold">
+        <div className="border-border bg-background/60 flex items-center justify-between border-b p-2 sm:p-3">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 mr-2">
+            <span className="bg-primary/20 text-primary-text border-primary-border/40 flex shrink-0 animate-pulse items-center gap-1.5 rounded-lg border px-2 sm:px-2.5 py-1 font-mono text-[10px] sm:text-xs font-bold">
               <HardDrive className="h-3.5 w-3.5" />
               .adaumc Explorer
             </span>
-            <div>
-              <h2 className="text-foreground max-w-lg truncate text-sm font-bold">
+            <div className="min-w-0">
+              <h2 className="text-foreground truncate text-xs sm:text-sm font-bold">
                 {video.title}
               </h2>
-              <p className="text-muted font-mono text-[10px]">
-                Magic: ADAUMC (0x414441554D43) • Payload Start Offset:{" "}
+              <p className="text-muted font-mono text-[9px] sm:text-[10px] truncate">
+                Magic: ADAUMC (0x414441554D43) • Payload:{" "}
                 {bundleData?.payloadStartOffset || 10} bytes
               </p>
             </div>
@@ -144,22 +144,22 @@ export const BundleExplorerModal: React.FC<BundleExplorerModalProps> = ({
 
           <button
             onClick={onClose}
-            className="hover:bg-surface-hover text-muted hover:text-foreground cursor-pointer rounded-xl p-2 transition"
+            className="hover:bg-surface-hover text-muted hover:text-foreground shrink-0 cursor-pointer rounded-xl p-1.5 transition"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* File Explorer Split View */}
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
           {/* Left Sidebar: Asset Directory */}
-          <div className="bg-background/80 border-border flex w-70 flex-col gap-2 border-r p-2">
+          <div className="bg-background/80 border-border flex w-full md:w-64 lg:w-72 shrink-0 flex-col gap-2 border-b md:border-b-0 md:border-r p-2 max-h-44 md:max-h-none">
             <div className="text-muted flex items-center gap-2 px-2 text-xs font-semibold">
               <Folder className="text-primary-text h-4 w-4" />
               <span>Bundle Files ({Object.keys(assetsMap).length})</span>
             </div>
 
-            <div className="flex flex-1 flex-col gap-2 overflow-y-auto">
+            <div className="flex flex-1 flex-col gap-1.5 overflow-y-auto">
               {loading ? (
                 <div className="text-muted p-2 text-xs">
                   Inspecting container index...
