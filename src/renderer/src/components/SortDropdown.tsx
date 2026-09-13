@@ -83,14 +83,10 @@ export const SortDropdown: React.FC<SortDropdownProps> = ({
     const updateCoords = () => {
       if (!triggerRef.current) return;
       const rect = triggerRef.current.getBoundingClientRect();
-      const panelWidth = 220;
+      const panelWidth = Math.min(220, window.innerWidth - 16);
 
       let top = rect.bottom + 6;
-      let left = rect.left;
-
-      if (window.innerWidth - rect.left < panelWidth) {
-        left = Math.max(10, rect.right - panelWidth);
-      }
+      let left = Math.max(8, Math.min(rect.left, window.innerWidth - panelWidth - 8));
 
       setPortalCoords({ top, left });
     };
@@ -155,7 +151,8 @@ export const SortDropdown: React.FC<SortDropdownProps> = ({
               position: "fixed",
               top: portalCoords.top,
               left: portalCoords.left,
-              width: 220,
+              width: Math.min(220, window.innerWidth - 16),
+              maxWidth: "calc(100vw - 16px)",
               zIndex: 9999,
             }}
             className="glass-modal animate-fade-in flex flex-col overflow-hidden rounded-xl p-1 shadow-2xl"

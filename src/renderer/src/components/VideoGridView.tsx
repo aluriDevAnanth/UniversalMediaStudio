@@ -8,15 +8,15 @@ import { sortVideosByRelevance } from "../utils/relevanceScoring";
 
 // ─── Virtual Grid Hook ────────────────────────────────────────────────────────
 
-const CARD_HEIGHT = 284; // px: aspect-video thumb (~168) + info (~90) + gap (26)
-const GAP = 24; // matches gap-6 (1.5rem = 24px)
+const CARD_MIN_WIDTH = 210;
+const CARD_HEIGHT = 240; // px: aspect-video thumb + info + actions + gap
+const GAP = 12; // matches gap-3 (12px)
 const OVERSCAN = 2; // extra rows to render above and below the visible area
 
 function getColumnCount(width: number): number {
-  if (width < 640) return 1;
-  if (width < 768) return 2;
-  if (width < 1024) return 3;
-  return 5;
+  if (width <= 0) return 1;
+  const count = Math.floor((width + GAP) / (CARD_MIN_WIDTH + GAP));
+  return Math.max(1, count);
 }
 
 interface VirtualGridState {

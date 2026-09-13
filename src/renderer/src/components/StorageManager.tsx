@@ -30,13 +30,13 @@ export const StorageManager: React.FC = () => {
   };
 
   return (
-    <div className="mx-auto w-full flex-1 space-y-6 overflow-y-auto px-4 py-2">
+    <div className="mx-auto w-full flex-1 space-y-4 md:space-y-6 overflow-y-auto px-2 md:px-4 py-2">
       {/* Title */}
-      <div className="flex items-center justify-between border-b border-border pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-4">
         <div>
-          <h2 className="flex items-center gap-3 text-2xl font-bold text-foreground">
-            <HardDrive className="h-6 w-6 text-primary-text" />
-            Storage Management & .adaumc Bundles
+          <h2 className="flex items-center gap-2 md:gap-3 text-lg md:text-2xl font-bold text-foreground">
+            <HardDrive className="h-5 w-5 md:h-6 md:w-6 text-primary-text shrink-0" />
+            <span>Storage Management & .adaumc</span>
           </h2>
           <p className="mt-1 text-xs text-muted">
             Manage unified binary containers, verify magic header signatures,
@@ -47,16 +47,16 @@ export const StorageManager: React.FC = () => {
         <button
           onClick={handleIntegrityCheck}
           disabled={checking}
-          className="flex cursor-pointer items-center gap-2 rounded-xl bg-primary px-4 py-2 text-xs font-semibold text-white shadow-lg transition hover:bg-primary-hover"
+          className="flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-xl bg-primary px-3 md:px-4 py-2 text-xs font-semibold text-white shadow-lg transition hover:bg-primary-hover"
         >
           <RefreshCw className={`h-4 w-4 ${checking ? "animate-spin" : ""}`} />
-          {checking ? "Scanning..." : "Verify Bundle Integrity"}
+          {checking ? "Scanning..." : "Verify Integrity"}
         </button>
       </div>
 
 
       {/* Storage Cards Overview */}
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6">
         <div className="relative overflow-hidden rounded-2xl border border-border bg-surface p-6">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-wider text-muted">
