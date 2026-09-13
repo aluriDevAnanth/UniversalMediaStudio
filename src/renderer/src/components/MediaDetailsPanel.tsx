@@ -24,10 +24,17 @@ export const MediaDetailsPanel: React.FC<MediaDetailsPanelProps> = ({
   if (!selectedVideo) return null;
 
   return (
-    <div
-      data-details-panel
-      className="glass-surface flex h-full w-80 shrink-0 flex-col overflow-hidden border-l border-white/20 dark:border-white/10 transition-all duration-300 shadow-2xl"
-    >
+    <>
+      {/* Mobile/Tablet Backdrop for slide-over mode */}
+      <div
+        className="fixed inset-0 z-40 bg-black/40 backdrop-blur-xs xl:hidden animate-fade-in"
+        onClick={() => setSelectedVideoId(null)}
+      />
+
+      <div
+        data-details-panel
+        className="glass-surface fixed inset-y-0 right-0 z-50 flex h-full w-80 max-w-[85vw] shrink-0 flex-col overflow-hidden border-l border-white/20 dark:border-white/10 transition-all duration-300 shadow-2xl xl:relative xl:z-auto xl:inset-auto xl:max-w-none animate-in slide-in-from-right duration-200"
+      >
       <div className="flex h-full flex-1 flex-col overflow-hidden">
         {/* Header */}
         <div className="border-border/60 flex items-center justify-between border-b p-4">
@@ -176,5 +183,6 @@ export const MediaDetailsPanel: React.FC<MediaDetailsPanelProps> = ({
         </div>
       </div>
     </div>
+    </>
   );
 };

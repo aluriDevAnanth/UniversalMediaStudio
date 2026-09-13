@@ -56,9 +56,9 @@ export const PlaylistsView: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-1 gap-2 overflow-hidden p-2">
+    <div className="flex flex-col md:flex-row flex-1 gap-2 overflow-hidden p-2">
       {/* Playlists Sidebar */}
-      <div className="flex w-72 flex-col gap-4 rounded-lg border border-border bg-surface p-2">
+      <div className="flex w-full md:w-64 lg:w-72 shrink-0 flex-col gap-3 rounded-lg border border-border bg-surface p-2 max-h-48 md:max-h-none overflow-hidden">
         <div className="flex items-center justify-between">
           <h2 className="flex items-center gap-2 font-bold text-foreground">
             <ListVideo className="h-5 w-5 text-primary-text" />
@@ -114,29 +114,29 @@ export const PlaylistsView: React.FC = () => {
               <div
                 key={pl.id}
                 onClick={() => setSelectedPlaylistId(pl.id)}
-                className={`flex w-full cursor-pointer items-center justify-between rounded-xl p-3 transition ${
+                className={`flex w-full cursor-pointer items-center justify-between rounded-xl p-2.5 transition ${
                   isActive
                     ? "shadow-primary/20 bg-primary text-white shadow-lg"
                     : "bg-background/40 border border-transparent text-muted hover:bg-surface-hover hover:text-foreground"
                 }`}
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
                   {pl.id === "watch_later" ? (
                     <Clock
-                      className={`h-4 w-4 ${isActive ? "text-white" : "text-primary-text"}`}
+                      className={`h-4 w-4 shrink-0 ${isActive ? "text-white" : "text-primary-text"}`}
                     />
                   ) : pl.id === "favourite" ? (
-                    <Star className="h-4 w-4 animate-pulse fill-current text-amber-500" />
+                    <Star className="h-4 w-4 shrink-0 animate-pulse fill-current text-amber-500" />
                   ) : (
-                    <ListVideo className="h-4 w-4 text-muted" />
+                    <ListVideo className="h-4 w-4 shrink-0 text-muted" />
                   )}
-                  <span className="max-w-[120px] truncate text-sm font-semibold">
+                  <span className="truncate text-xs sm:text-sm font-semibold">
                     {pl.name}
                   </span>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <span className="bg-background/60 px-2 py-0.5 font-mono text-foreground">
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="bg-background/60 rounded px-1.5 py-0.5 font-mono text-xs text-foreground">
                     {pl.videoIds.length}
                   </span>
                   {!pl.isDefault && (
@@ -171,7 +171,7 @@ export const PlaylistsView: React.FC = () => {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {playlistVideos.map((video) => (
               <VideoCard key={video.id} video={video} />
             ))}
