@@ -1,23 +1,17 @@
-import React, { useState, useEffect, useRef } from "react";
-import {
-  Tag,
-  X,
-  Plus,
-  Trash2,
-  Palette,
-  Edit2,
-  Check,
-  ChevronDown,
-  Search,
-} from "lucide-react";
+import React, { useState } from "react";
+import { Tag, Search } from "lucide-react";
 import { useVideoStore } from "../store/videoStore";
 import {
-  PRESET_TAG_COLORS,
   parseTag,
   formatTag,
   getCategoryColor,
 } from "../utils/tagColors";
-import { TagBadge } from "./TagBadge";
+import {
+  TagManagerHeader,
+  TagCreatorBar,
+  TagFilterBar,
+  TagCategoryCard,
+} from "./tag-manager/index";
 
 interface TagManagerDialogProps {
   open: boolean;
@@ -40,19 +34,11 @@ export const TagManagerDialog: React.FC<TagManagerDialogProps> = ({
     setSelectedTags,
   } = useVideoStore();
 
-  const [newCatInput, setNewCatInput] = useState("");
-  const [newNameInput, setNewNameInput] = useState("");
-  const [selectedColor, setSelectedColor] = useState(PRESET_TAG_COLORS[0]);
-
-  // Combobox state for category input
-  const [isCatDropdownOpen, setIsCatDropdownOpen] = useState(false);
-  const catComboboxRef = useRef<HTMLDivElement>(null);
-  // Inline editing state: tag being edited -> { cat, name }
   const [editingTag, setEditingTag] = useState<string | null>(null);
   const [editCatInput, setEditCatInput] = useState("");
   const [editNameInput, setEditNameInput] = useState("");
   const [filterQuery, setFilterQuery] = useState("");
-  // Group tags by category
+
   const groupedTags: Record<string, string[]> = {};
   for (const t of tags) {
     const { category } = parseTag(t);
@@ -64,34 +50,41 @@ export const TagManagerDialog: React.FC<TagManagerDialogProps> = ({
 
   const categories = Object.keys(groupedTags).sort();
 
-  // Automatic Color Synchronization when newCatInput changes
-  useEffect(() => {
-    const cat = newCatInput.trim();
-    if (cat) {
-      const color = getCategoryColor(cat, categoryColors);
-      setSelectedColor(color);
-    }
-  }, [newCatInput, categoryColors]);
-
-  // Close category combobox dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        catComboboxRef.current &&
-        !catComboboxRef.current.contains(event.target as Node)
-      ) {
-        setIsCatDropdownOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
   if (!open) return null;
 
-  const filteredCategories = categories.filter((c) =>
-    c.toLowerCase().includes(newCatInput.toLowerCase().trim()),
-  );
+  const handleAddTag = async (cat: string, nm: string, selectedColor: string) => {
+    const formatted = formatTag(cat, nm);
+    await addTag(formatted);
+    await setCategoryColor(cat, selectedColor);
+  };
+
+  const handleSaveEdit = async (oldTag: string) => {
+    const newFormatted = formatTag(editCatInput, editNameInput);
+    if (newFormatted && newFormatted !== oldTag) {
+      await renameTag(oldTag, newFormatted);
+    }
+    setEditingTag(null);
+  };
+
+  const handleDeleteCategory = async (category: string, allCatTags: string[]) => {
+    if (
+      confirm(
+        `Delete category "${category}" and all ${allCatTags.length} tag(s) globally from all videos?`,
+      )
+    ) {
+      for (const t of allCatTags) {
+        await deleteTag(t);
+      }
+    }
+  };
+
+  const toggleCategoryTags = (cTags: string[], isAllSelected: boolean) => {
+    if (isAllSelected) {
+      setSelectedTags(selectedTags.filter((t) => !cTags.includes(t)));
+    } else {
+      setSelectedTags(Array.from(new Set([...selectedTags, ...cTags])));
+    }
+  };
 
   return (
     <div
@@ -101,207 +94,26 @@ export const TagManagerDialog: React.FC<TagManagerDialogProps> = ({
       }}
     >
       <div className="glass-modal flex h-[92vh] max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl">
-        {/* Dialog Header */}
-        <div className="border-border/60 bg-background/50 backdrop-blur-sm flex items-center justify-between border-b px-3 sm:px-4 py-2.5 sm:py-3">
-          <div className="flex items-center gap-2.5 min-w-0 mr-2">
-            <div className="bg-primary/15 text-primary-text border-primary/25 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border">
-              <Tag className="h-4 w-4" />
-            </div>
-            <div className="min-w-0">
-              <h2 className="text-foreground text-xs sm:text-sm font-bold tracking-tight truncate">
-                Taxonomy & Tag Manager
-              </h2>
-              <p className="text-muted text-[10px] sm:text-[11px] truncate">
-                Organize and color-code taxonomy categories & tags
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-muted hover:bg-surface-hover hover:text-foreground shrink-0 cursor-pointer rounded-lg p-1.5 transition"
-            title="Close (Esc)"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
+        {/* Header */}
+        <TagManagerHeader onClose={onClose} />
 
         {/* Creator Bar */}
-        <form
-          onSubmit={async (e) => {
-            e.preventDefault();
-            const cat = newCatInput.trim() || "General";
-            const nm = newNameInput.trim();
-            if (nm) {
-              const formatted = formatTag(cat, nm);
-              await addTag(formatted);
-              await setCategoryColor(cat, selectedColor);
-              setNewNameInput("");
-            }
-          }}
-          className="border-border bg-background/40 flex flex-wrap items-center gap-2 border-b p-2 sm:px-4 sm:py-2.5"
-        >
-          {/* Category Combobox */}
-          <div ref={catComboboxRef} className="relative w-full sm:w-40 md:w-48 shrink-0">
-            <div className="border-border bg-background focus-within:border-primary focus-within:ring-primary/30 flex items-center justify-between rounded-lg border px-2.5 py-1.5 transition focus-within:ring-1">
-              <input
-                type="text"
-                value={newCatInput}
-                onChange={(e) => {
-                  setNewCatInput(e.target.value);
-                  setIsCatDropdownOpen(true);
-                }}
-                onFocus={() => setIsCatDropdownOpen(true)}
-                placeholder="Category (e.g. Genre)..."
-                className="text-foreground placeholder-muted/60 w-full bg-transparent text-xs focus:outline-none"
-              />
-              <button
-                type="button"
-                onClick={() => setIsCatDropdownOpen((prev) => !prev)}
-                className="text-muted hover:text-foreground shrink-0 cursor-pointer p-0.5"
-              >
-                <ChevronDown className="h-3 w-3" />
-              </button>
-            </div>
-
-            {/* Combobox Dropdown */}
-            {isCatDropdownOpen && (
-              <div className="border-border bg-surface absolute top-full left-0 z-50 mt-1 max-h-48 w-56 overflow-y-auto rounded-xl border p-1 shadow-2xl">
-                {filteredCategories.length > 0 ? (
-                  filteredCategories.map((cat) => {
-                    const cColor = getCategoryColor(cat, categoryColors);
-                    return (
-                      <button
-                        key={cat}
-                        type="button"
-                        onClick={() => {
-                          setNewCatInput(cat);
-                          setSelectedColor(cColor);
-                          setIsCatDropdownOpen(false);
-                        }}
-                        className="hover:bg-surface-hover flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-xs transition"
-                      >
-                        <span className="text-foreground truncate font-medium">
-                          {cat}
-                        </span>
-                        <span
-                          style={{ backgroundColor: cColor }}
-                          className="h-2.5 w-2.5 shrink-0 rounded-full"
-                        />
-                      </button>
-                    );
-                  })
-                ) : (
-                  <div className="text-muted p-2 text-center text-[11px]">
-                    Create category "{newCatInput.trim() || "New"}"
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          <span className="text-muted text-xs font-bold hidden sm:inline">:</span>
-
-          {/* Tag Name Input */}
-          <input
-            type="text"
-            value={newNameInput}
-            onChange={(e) => setNewNameInput(e.target.value)}
-            placeholder="New tag name..."
-            className="border-border bg-background text-foreground placeholder-muted/60 focus:border-primary focus:ring-primary/30 min-w-[120px] flex-1 rounded-lg border px-3 py-1.5 text-xs transition focus:ring-1 focus:outline-none"
-          />
-
-          {/* Color Selector */}
-          <div className="bg-background/60 border-border/80 flex shrink-0 items-center gap-1.5 rounded-lg border px-2 py-1">
-            <span className="text-muted mr-0.5 text-[10px] font-semibold tracking-wider uppercase hidden sm:inline">
-              Color:
-            </span>
-            {PRESET_TAG_COLORS.slice(0, 6).map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => {
-                  setSelectedColor(c);
-                  if (newCatInput.trim()) {
-                    setCategoryColor(newCatInput.trim(), c);
-                  }
-                }}
-                style={{ backgroundColor: c }}
-                className={`h-4 w-4 cursor-pointer rounded-full transition-transform ${
-                  selectedColor === c
-                    ? "scale-110 ring-2 ring-white"
-                    : "opacity-60 hover:scale-110 hover:opacity-100"
-                }`}
-                title={`Set category color ${c}`}
-              />
-            ))}
-            {/* Custom Color Input */}
-            <label
-              className="border-border bg-surface relative flex h-4 w-4 cursor-pointer items-center justify-center rounded-full border transition hover:scale-110"
-              title="Custom color picker"
-            >
-              <input
-                type="color"
-                value={selectedColor}
-                onChange={(e) => {
-                  const color = e.target.value;
-                  setSelectedColor(color);
-                  if (newCatInput.trim()) {
-                    setCategoryColor(newCatInput.trim(), color);
-                  }
-                }}
-                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-              />
-              <Palette
-                className="h-2.5 w-2.5"
-                style={{ color: selectedColor }}
-              />
-            </label>
-          </div>
-
-          {/* Submit button */}
-          <button
-            type="submit"
-            className="bg-primary hover:bg-primary-hover flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Add Tag
-          </button>
-        </form>
+        <TagCreatorBar
+          categories={categories}
+          categoryColors={categoryColors}
+          onAddTag={handleAddTag}
+          onSetCategoryColor={setCategoryColor}
+        />
 
         {/* Filter & Search Bar */}
-        <div className="border-border/70 bg-background/30 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b px-2 sm:px-3 py-1.5 sm:py-2">
-          <div className="flex items-center gap-2">
-            <span className="text-muted text-[11px] sm:text-xs font-bold tracking-wider uppercase">
-              Categories ({categories.length})
-            </span>
-            <span className="text-muted bg-surface/80 border-border/80 rounded-full border px-2 py-0.5 text-[10px] font-medium">
-              {tags.length} tags
-            </span>
-          </div>
+        <TagFilterBar
+          categoriesCount={categories.length}
+          tagsCount={tags.length}
+          filterQuery={filterQuery}
+          onFilterChange={setFilterQuery}
+        />
 
-          {/* Search Input */}
-          <div className="relative w-full sm:w-64">
-            <Search className="text-muted pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2" />
-            <input
-              type="text"
-              value={filterQuery}
-              onChange={(e) => setFilterQuery(e.target.value)}
-              placeholder="Search category or tag..."
-              className="border-border bg-background text-foreground placeholder:text-muted focus:border-primary focus:ring-primary/30 w-full rounded-lg border py-1 pr-7 pl-7 text-xs transition focus:ring-1 focus:outline-none"
-            />
-            {filterQuery && (
-              <button
-                onClick={() => setFilterQuery("")}
-                className="text-muted hover:text-foreground absolute top-1/2 right-2 -translate-y-1/2 cursor-pointer p-0.5"
-                title="Clear filter"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Scrollable Taxonomy List - Fills Remaining Viewport Height */}
+        {/* Scrollable Taxonomy List */}
         <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2">
           {tags.length === 0 ? (
             <div className="text-muted flex h-full flex-col items-center justify-center py-16 text-center">
@@ -355,220 +167,39 @@ export const TagManagerDialog: React.FC<TagManagerDialogProps> = ({
                 const isAllSelected =
                   allCatTags.length > 0 &&
                   allCatTags.every((t) => selectedTags.includes(t));
-                const isSomeSelected =
-                  allCatTags.some((t) => selectedTags.includes(t)) &&
-                  !isAllSelected;
-
-                const toggleCategoryTags = (cTags: string[]) => {
-                  if (isAllSelected) {
-                    setSelectedTags(
-                      selectedTags.filter((t) => !cTags.includes(t)),
-                    );
-                  } else {
-                    setSelectedTags(
-                      Array.from(new Set([...selectedTags, ...cTags])),
-                    );
-                  }
-                };
-
-                const handleSaveEdit = async (t: string) => {
-                  const newFormatted = formatTag(editCatInput, editNameInput);
-                  if (newFormatted && newFormatted !== t) {
-                    await renameTag(t, newFormatted);
-                  }
-                  setEditingTag(null);
-                };
 
                 return (
-                  <div
+                  <TagCategoryCard
                     key={category}
-                    className="group/cat border-border bg-surface hover:bg-surface-hover/30 rounded-xl border p-2.5 shadow-xs transition"
-                  >
-                    {/* Category Header Row */}
-                    <div className="border-border flex items-center justify-between border-b pb-2">
-                      <div className="flex items-center gap-2">
-                        {/* Category Bulk Checkbox */}
-                        <input
-                          type="checkbox"
-                          checked={isAllSelected}
-                          ref={(el) => {
-                            if (el) el.indeterminate = isSomeSelected;
-                          }}
-                          onChange={() => toggleCategoryTags(allCatTags)}
-                          title={
-                            isAllSelected
-                              ? "Deselect all category tags"
-                              : "Select all category tags"
-                          }
-                          className="accent-primary border-border text-primary focus:ring-primary h-4 w-4 cursor-pointer rounded"
-                        />
-
-                        {/* Category Color Indicator */}
-                        <span
-                          style={{ backgroundColor: catColor }}
-                          className="h-3 w-3 shrink-0 rounded-full shadow-xs ring-1 ring-white/20"
-                        />
-
-                        <h3 className="text-foreground text-xs font-bold tracking-wider uppercase">
-                          {category}
-                        </h3>
-
-                        <span className="text-foreground/80 bg-background border-border rounded-full border px-2 py-0.5 text-[10px] font-semibold">
-                          {allCatTags.length} tag
-                          {allCatTags.length !== 1 ? "s" : ""}
-                        </span>
-                      </div>
-
-                      {/* Category Palette & Delete Action */}
-                      <div className="flex items-center gap-2">
-                        {/* Mini Color Dots */}
-                        <div className="flex items-center gap-1">
-                          {PRESET_TAG_COLORS.slice(0, 6).map((c) => (
-                            <button
-                              key={c}
-                              onClick={() => setCategoryColor(category, c)}
-                              style={{ backgroundColor: c }}
-                              className={`h-3 w-3 cursor-pointer rounded-full transition-transform ${
-                                catColor === c
-                                  ? "ring-1.5 scale-125 ring-white"
-                                  : "opacity-40 hover:scale-110 hover:opacity-100"
-                              }`}
-                              title={`Set ${category} color to ${c}`}
-                            />
-                          ))}
-                        </div>
-
-                        {/* Bulk Delete Category Action */}
-                        <button
-                          onClick={async () => {
-                            if (
-                              confirm(
-                                `Delete category "${category}" and all ${allCatTags.length} tag(s) globally from all videos?`,
-                              )
-                            ) {
-                              for (const t of allCatTags) {
-                                await deleteTag(t);
-                              }
-                            }
-                          }}
-                          title={`Delete category "${category}" and its tags`}
-                          className="text-muted cursor-pointer rounded p-1 transition hover:bg-rose-500/15 hover:text-rose-400"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Tags Wrapped Chips */}
-                    <div className="flex flex-wrap gap-1.5 pt-2">
-                      {catTags.map((t) => {
-                        const { category: cName, name: tName } = parseTag(t);
-                        const isEditing = editingTag === t;
-                        const videoCount = videos.filter((v) =>
-                          v.tags.includes(t),
-                        ).length;
-
-                        if (isEditing) {
-                          return (
-                            <div
-                              key={t}
-                              className="border-primary bg-background flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs shadow-md ring-1 ring-primary/40"
-                            >
-                              <input
-                                type="text"
-                                value={editCatInput}
-                                onChange={(e) =>
-                                  setEditCatInput(e.target.value)
-                                }
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") handleSaveEdit(t);
-                                  if (e.key === "Escape") setEditingTag(null);
-                                }}
-                                placeholder="Category"
-                                className="text-foreground w-20 bg-transparent text-xs focus:outline-none"
-                              />
-                              <span className="text-muted font-bold">:</span>
-                              <input
-                                type="text"
-                                value={editNameInput}
-                                onChange={(e) =>
-                                  setEditNameInput(e.target.value)
-                                }
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") handleSaveEdit(t);
-                                  if (e.key === "Escape") setEditingTag(null);
-                                }}
-                                placeholder="Tag Name"
-                                autoFocus
-                                className="text-foreground w-24 bg-transparent text-xs font-semibold focus:outline-none"
-                              />
-                              <button
-                                onClick={() => handleSaveEdit(t)}
-                                className="bg-primary hover:bg-primary-hover cursor-pointer rounded p-1 text-white transition"
-                                title="Save changes (Enter)"
-                              >
-                                <Check className="h-3 w-3" />
-                              </button>
-                              <button
-                                onClick={() => setEditingTag(null)}
-                                className="text-muted hover:text-foreground cursor-pointer p-1 transition"
-                                title="Cancel (Esc)"
-                              >
-                                <X className="h-3 w-3" />
-                              </button>
-                            </div>
-                          );
-                        }
-
-                        return (
-                          <div
-                            key={t}
-                            className="group/tag border-border bg-background hover:bg-surface-hover hover:border-primary/60 flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs shadow-2xs transition-all duration-150"
-                          >
-                            <TagBadge
-                              rawTag={t}
-                              size="sm"
-                              showDot
-                              showCategory={false}
-                            />
-                            <span className="text-foreground/90 bg-surface border-border rounded border px-1.5 py-0.5 text-[10px] font-bold">
-                              {videoCount}
-                            </span>
-
-                            {/* Action buttons ONLY shown on hover over this tag without occupying blank layout space */}
-                            <div className="hidden group-hover/tag:inline-flex items-center gap-0.5 ml-0.5">
-                              <button
-                                onClick={() => {
-                                  setEditingTag(t);
-                                  setEditCatInput(cName);
-                                  setEditNameInput(tName);
-                                }}
-                                title="Edit tag"
-                                className="text-muted hover:bg-primary/20 hover:text-primary-text cursor-pointer rounded p-1 transition"
-                              >
-                                <Edit2 className="h-3 w-3" />
-                              </button>
-                              <button
-                                onClick={async () => {
-                                  if (
-                                    confirm(
-                                      `Delete tag "${t}" globally from all videos?`,
-                                    )
-                                  ) {
-                                    await deleteTag(t);
-                                  }
-                                }}
-                                title="Delete tag globally"
-                                className="text-muted cursor-pointer rounded p-1 transition hover:bg-rose-500/20 hover:text-rose-400"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
+                    category={category}
+                    catColor={catColor}
+                    allCatTags={allCatTags}
+                    catTags={catTags}
+                    selectedTags={selectedTags}
+                    editingTag={editingTag}
+                    editCatInput={editCatInput}
+                    editNameInput={editNameInput}
+                    videos={videos}
+                    onToggleCategoryTags={(cTags) =>
+                      toggleCategoryTags(cTags, isAllSelected)
+                    }
+                    onSetCategoryColor={setCategoryColor}
+                    onDeleteCategory={handleDeleteCategory}
+                    onStartEdit={(t, c, n) => {
+                      setEditingTag(t);
+                      setEditCatInput(c);
+                      setEditNameInput(n);
+                    }}
+                    onCancelEdit={() => setEditingTag(null)}
+                    onSaveEdit={handleSaveEdit}
+                    onDeleteTag={async (t) => {
+                      if (confirm(`Delete tag "${t}" globally from all videos?`)) {
+                        await deleteTag(t);
+                      }
+                    }}
+                    onEditCatChange={setEditCatInput}
+                    onEditNameChange={setEditNameInput}
+                  />
                 );
               })
           )}
