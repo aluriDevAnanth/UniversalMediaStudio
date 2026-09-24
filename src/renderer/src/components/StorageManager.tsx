@@ -7,6 +7,7 @@ import {
   Binary,
 } from "lucide-react";
 import { useVideoStore } from "../store/videoStore";
+import { StorageStatCard, StorageBundleTable } from "./storage";
 
 export const StorageManager: React.FC = () => {
   const { videos, analytics } = useVideoStore();
@@ -54,96 +55,35 @@ export const StorageManager: React.FC = () => {
         </button>
       </div>
 
-
       {/* Storage Cards Overview */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6">
-        <div className="relative overflow-hidden rounded-2xl border border-border bg-surface p-6">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted">
-              Total Storage Used
-            </span>
-            <Database className="h-5 w-5 text-primary-text" />
-          </div>
-          <div className="mt-4 text-3xl font-extrabold text-foreground">
-            {formatSize(totalBytes)}
-          </div>
-          <div className="mt-2 text-xs text-muted">
-            Across {videos.length} .adaumc container archives
-          </div>
-        </div>
+        <StorageStatCard
+          title="Total Storage Used"
+          icon={Database}
+          value={formatSize(totalBytes)}
+          subtitle={`Across ${videos.length} .adaumc container archives`}
+        />
 
-        <div className="relative overflow-hidden rounded-2xl border border-border bg-surface p-6">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted">
-              Container Format
-            </span>
-            <Binary className="h-5 w-5 text-primary-text" />
-          </div>
-          <div className="mt-4 text-3xl font-extrabold text-primary-text">
-            ADAUMC
-          </div>
-          <div className="mt-2 text-xs text-muted">
-            Magic Header: 0x41 0x44 0x41 0x55 0x4D 0x43
-          </div>
-        </div>
+        <StorageStatCard
+          title="Container Format"
+          icon={Binary}
+          value="ADAUMC"
+          valueColor="text-primary-text"
+          subtitle="Magic Header: 0x41 0x44 0x41 0x55 0x4D 0x43"
+        />
 
-        <div className="relative overflow-hidden rounded-2xl border border-border bg-surface p-6">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted">
-              Stream Cipher Security
-            </span>
-            <ShieldCheck className="h-5 w-5 text-emerald-500" />
-          </div>
-          <div className="mt-4 text-3xl font-extrabold text-emerald-500">
-            AES-128 XOR
-          </div>
-          <div className="mt-2 text-xs text-muted">
-            Range Request Stream Engine Active
-          </div>
-        </div>
+        <StorageStatCard
+          title="Stream Cipher Security"
+          icon={ShieldCheck}
+          iconColor="text-emerald-500"
+          value="AES-128 XOR"
+          valueColor="text-emerald-500"
+          subtitle="Range Request Stream Engine Active"
+        />
       </div>
 
       {/* Bundle Files Table */}
-      <div className="rounded-2xl border border-border bg-surface p-6">
-        <h3 className="mb-4 text-base font-bold text-foreground">
-          Active .adaumc Bundle Catalog
-        </h3>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-muted">
-            <thead className="bg-background/60 border-b border-border text-[10px] font-semibold uppercase text-muted">
-              <tr>
-                <th className="px-4 py-3">Bundle ID</th>
-                <th className="px-4 py-3">Title</th>
-                <th className="px-4 py-3">Resolution</th>
-                <th className="px-4 py-3">Assets Encapsulated</th>
-                <th className="px-4 py-3">Created At</th>
-              </tr>
-            </thead>
-            <tbody className="divide-border/60 divide-y">
-              {videos.map((v) => (
-                <tr key={v.id} className="hover:bg-surface-hover/50 transition">
-                  <td className="px-4 py-3 font-mono text-primary-text">
-                    {v.id}
-                  </td>
-                  <td className="px-4 py-3 font-medium text-foreground">
-                    {v.title}
-                  </td>
-                  <td className="px-4 py-3">{v.resolution}</td>
-                  <td className="px-4 py-3">
-                    <span className="rounded border border-border bg-background px-2 py-0.5 text-muted">
-                      video, thumb, gif, vtt, sprite
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-muted">
-                    {new Date(v.createdAt).toLocaleString()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <StorageBundleTable videos={videos} />
     </div>
   );
 };
