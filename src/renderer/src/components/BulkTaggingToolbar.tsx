@@ -1,14 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
-import {
-  CheckSquare,
-  X,
-  Trash2,
-  Plus,
-  MinusCircle,
-  ChevronUp,
-} from "lucide-react";
+import { CheckSquare, X, Trash2 } from "lucide-react";
 import { useVideoStore } from "../store/videoStore";
-import { TagBadge } from "./TagBadge";
+import { BulkAddTagMenu, BulkRemoveTagMenu } from "./bulk-tagging";
 
 export const BulkTaggingToolbar: React.FC = () => {
   const {
@@ -24,7 +17,6 @@ export const BulkTaggingToolbar: React.FC = () => {
 
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [removeMenuOpen, setRemoveMenuOpen] = useState(false);
-  const [newTagInput, setNewTagInput] = useState("");
 
   const addMenuRef = useRef<HTMLDivElement>(null);
   const removeMenuRef = useRef<HTMLDivElement>(null);
@@ -77,107 +69,36 @@ export const BulkTaggingToolbar: React.FC = () => {
       </div>
 
       {/* Bulk Add Tag Dropdown */}
-      <div ref={addMenuRef} className="relative">
-        <button
-          onClick={() => {
-            setAddMenuOpen((o) => !o);
-            setRemoveMenuOpen(false);
-          }}
-          className="flex cursor-pointer items-center gap-1.5 rounded-xl bg-primary/15 px-3 py-1.5 text-xs font-bold text-primary-text transition hover:bg-primary/25"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          Add Tag
-          <ChevronUp className="h-3 w-3" />
-        </button>
-
-        {addMenuOpen && (
-          <div className="absolute bottom-full left-0 mb-2 w-56 rounded-xl border border-border bg-surface p-2 shadow-2xl animate-fade-in">
-            <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-muted">
-              Add Tag to {selectedVideoIds.length} items
-            </div>
-            {/* Inline tag creation */}
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                const trimmed = newTagInput.trim();
-                if (trimmed) {
-                  await bulkAddTag(trimmed);
-                  setNewTagInput("");
-                  setAddMenuOpen(false);
-                }
-              }}
-              className="mb-2 flex gap-1"
-            >
-              <input
-                type="text"
-                value={newTagInput}
-                onChange={(e) => setNewTagInput(e.target.value)}
-                placeholder="New tag..."
-                className="w-full rounded-lg border border-border bg-background px-2 py-1 text-xs text-foreground focus:border-primary focus:outline-none"
-                autoFocus
-              />
-              <button
-                type="submit"
-                className="rounded-lg bg-primary px-2 py-1 text-xs font-bold text-white"
-              >
-                Add
-              </button>
-            </form>
-
-            <div className="max-h-48 space-y-1 overflow-y-auto">
-              {tags.map((t) => (
-                <div
-                  key={t}
-                  onClick={async () => {
-                    await bulkAddTag(t);
-                    setAddMenuOpen(false);
-                  }}
-                  className="hover:bg-surface-hover flex w-full cursor-pointer items-center justify-between rounded-lg p-1 transition"
-                >
-                  <TagBadge rawTag={t} size="sm" showDot />
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+      <BulkAddTagMenu
+        isOpen={addMenuOpen}
+        onToggle={() => {
+          setAddMenuOpen((o) => !o);
+          setRemoveMenuOpen(false);
+        }}
+        tags={tags}
+        selectedCount={selectedVideoIds.length}
+        onAddTag={async (tag) => {
+          await bulkAddTag(tag);
+          setAddMenuOpen(false);
+        }}
+        containerRef={addMenuRef}
+      />
 
       {/* Bulk Remove Tag Dropdown */}
-      <div ref={removeMenuRef} className="relative">
-        <button
-          onClick={() => {
-            setRemoveMenuOpen((o) => !o);
-            setAddMenuOpen(false);
-          }}
-          className="border-border bg-surface text-muted hover:bg-surface-hover hover:text-foreground flex cursor-pointer items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition"
-        >
-          <MinusCircle className="h-3.5 w-3.5" />
-          Remove Tag
-          <ChevronUp className="h-3 w-3" />
-        </button>
-
-        {removeMenuOpen && (
-          <div className="border-border bg-surface animate-fade-in absolute bottom-full left-0 mb-2 w-64 rounded-xl border p-2 shadow-2xl">
-            <div className="text-muted mb-2 text-[10px] font-bold tracking-wider uppercase">
-              Remove Tag from {selectedVideoIds.length} items
-            </div>
-            <div className="max-h-48 space-y-1 overflow-y-auto">
-              {tags.map((t) => (
-                <div
-                  key={t}
-                  onClick={async () => {
-                    await bulkRemoveTag(t);
-                    setRemoveMenuOpen(false);
-                  }}
-                  className="hover:bg-surface-hover flex w-full cursor-pointer items-center justify-between rounded-lg p-1 transition"
-                >
-                  <TagBadge rawTag={t} size="sm" showDot />
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+      <BulkRemoveTagMenu
+        isOpen={removeMenuOpen}
+        onToggle={() => {
+          setRemoveMenuOpen((o) => !o);
+          setAddMenuOpen(false);
+        }}
+        tags={tags}
+        selectedCount={selectedVideoIds.length}
+        onRemoveTag={async (tag) => {
+          await bulkRemoveTag(tag);
+          setRemoveMenuOpen(false);
+        }}
+        containerRef={removeMenuRef}
+      />
 
       {/* Bulk Delete */}
       <button
